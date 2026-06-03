@@ -180,6 +180,7 @@ async def upload_pdf(
         "status": "uploaded"
     }
 """
+"""
 # Import APIRouter
 # Used to create modular API routes
 from fastapi import APIRouter
@@ -442,3 +443,219 @@ def view_document(document_id: str):
         status_code=404,
         detail="Document not found"
     )
+"""
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
+
+import shutil
+import os
+import uuid
+import json
+
+from app.services.parser import PDFParser
+
+
+router = APIRouter(
+    prefix="/api",
+    tags=["Upload"]
+)
+
+
+UPLOAD_DIR = "app/uploads"
+
+METADATA_FILE = "documents.json"
+
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+# Create metadata file if not exists
+if not os.path.exists(METADATA_FILE):
+
+    with open(METADATA_FILE, "w") as f:
+        json.dump([], f)
+
+
+@router.post("/upload")
+async def upload_pdf(file: UploadFile = File(...)):
+
+    # Validate PDF
+    if file.content_type != "application/pdf":
+
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are allowed"
+        )
+
+    # Generate unique document ID
+    document_id = str(uuid.uuid4())
+
+    # Create document folder
+    document_folder = os.path.join(
+        UPLOAD_DIR,
+        document_id
+    )
+
+    os.makedirs(document_folder)
+
+    # File path
+    file_path = os.path.join(
+        document_folder,
+        file.filename
+    )
+
+    # Save file
+    with open(file_path, "wb") as buffer:
+
+        shutil.copyfileobj(
+            file.file,
+            buffer
+        )
+
+    # Parse PDF
+    parser = PDFParser(file_path)
+
+    parsed_data = parser.parse()
+
+    # Store metadata
+    document_data = {
+
+        "document_id": document_id,
+
+        "filename": file.filename,
+
+        "path": file_path,
+
+        "total_pages": len(parsed_data),
+
+        "status": "parsed"
+    }
+
+    # Read metadata
+    with open(METADATA_FILE, "r") as f:
+
+        documents = json.load(f)
+
+    # Add document
+    documents.append(document_data)
+
+    # Save metadata
+    with open(METADATA_FILE, "w") as f:
+
+        json.dump(documents, f, indent=4)
+
+    return {
+
+        "message": "PDF uploaded and parsed successfully",
+
+        "document": document_data,
+
+        "pages": parsed_data
+    }
+
+
+@router.get("/documents")
+def get_documents():
+
+    # Read metadata
+    with open(METADATA_FILE, "r") as f:
+
+        documents = json.load(f)
+
+    valid_documents = []
+
+    # Keep only valid documents
+    for doc in documents:
+
+        if os.path.exists(doc["path"]):
+
+            valid_documents.append(doc)
+
+    # Rewrite cleaned metadata file
+    with open(METADATA_FILE, "w") as f:
+
+        json.dump(valid_documents, f, indent=4)
+
+    return valid_documents
+
+@router.get("/view/{document_id}")
+def view_document(document_id: str):
+
+    # Read metadata
+    with open(METADATA_FILE, "r") as f:
+
+        documents = json.load(f)
+
+    for doc in documents:
+
+        if doc["document_id"] == document_id:
+
+            # Check if file actually exists
+            if not os.path.exists(doc["path"]):
+
+                raise HTTPException(
+                    status_code=404,
+                    detail="File missing from storage"
+                )
+
+            return FileResponse(
+                path=doc["path"],
+                media_type="application/pdf"
+            )
+
+    raise HTTPException(
+        status_code=404,
+        detail="Document not found"
+    )
+
+
+@router.delete("/delete/{document_id}")
+def delete_document(document_id: str):
+
+    # Read metadata
+    with open(METADATA_FILE, "r") as f:
+
+        documents = json.load(f)
+
+    updated_documents = []
+
+    found = False
+
+    for doc in documents:
+
+        # Matching document
+        if doc["document_id"] == document_id:
+
+            found = True
+
+            # Delete actual PDF
+            if os.path.exists(doc["path"]):
+
+                os.remove(doc["path"])
+
+            # Delete empty folder
+            folder_path = os.path.dirname(doc["path"])
+
+            if os.path.exists(folder_path):
+
+                os.rmdir(folder_path)
+
+        else:
+
+            updated_documents.append(doc)
+
+    # Save updated metadata
+    with open(METADATA_FILE, "w") as f:
+
+        json.dump(updated_documents, f, indent=4)
+
+    if not found:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    return {
+        "message": "Document deleted successfully"
+    }
