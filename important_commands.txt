@@ -1,3 +1,5 @@
 pip freeze > requirements.txt -> Run it only when:you install new dependencies,project dependencies change,before pushing to GitHub,before deployment.
 uvicorn app.main:app --reload  -> to START your FastAPI backend server.
 http://127.0.0.1:8000/docs -> check FastAPI at this .
+https://github.com/UB-Mannheim/tesseract/wiki?utm_source=chatgpt.com -> Tesseract OCR Official Installer 
+and place code in pthon file to connect (pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe")
