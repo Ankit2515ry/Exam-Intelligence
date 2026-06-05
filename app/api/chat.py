@@ -1,35 +1,82 @@
+"""
+Chat API Routes
+
+Responsibilities:
+-----------------
+1. Receive user questions
+2. Validate requests
+3. Call chat orchestration service
+4. Return grounded responses
+
+IMPORTANT:
+-----------
+This API layer should remain THIN.
+
+It should NOT:
+---------------
+- retrieve vectors
+- rerank chunks
+- build prompts
+- call vector DB directly
+
+All orchestration belongs inside:
+services/chat_service.py
+"""
+
 from fastapi import APIRouter
 
-from app.models.chat import ChatRequest, ChatResponse
+from app.models.chat import (
+    ChatRequest,
+    ChatResponse
+)
 
-from app.services.retriever import retrieve_relevant_chunks
-from app.services.prompt_builder import build_prompt
-from app.services.llm import generate_answer
-
-router = APIRouter()
+from app.services.chat_service import (
+    chat_with_documents
+)
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+# =========================================================
+# ROUTER
+# =========================================================
 
-    # STEP 1: Retrieve chunks
-    retrieved_chunks = retrieve_relevant_chunks(
-        request.question,
-        request.top_k
+router = APIRouter(
+
+    prefix="/api",
+
+    tags=["Chat"]
+)
+
+
+# =========================================================
+# CHAT ENDPOINT
+# =========================================================
+
+@router.post(
+    "/chat",
+    response_model=ChatResponse
+)
+def chat(
+    request: ChatRequest
+):
+    """
+    Chat with uploaded documents.
+
+    FLOW:
+    -----
+    Question
+        ↓
+    Chat Service
+        ↓
+    RAG Pipeline
+        ↓
+    Grounded Answer
+    """
+
+    response = chat_with_documents(
+
+        question=request.question,
+
+        document_id=request.document_id
     )
 
-    # STEP 2: Build prompt
-    prompt = build_prompt(
-        request.question,
-        retrieved_chunks
-    )
-
-    # STEP 3: Generate answer
-    answer = generate_answer(prompt)
-
-    # STEP 4: Return response
-    return {
-        "question": request.question,
-        "answer": answer,
-        "sources": retrieved_chunks
-    }
+    return response
