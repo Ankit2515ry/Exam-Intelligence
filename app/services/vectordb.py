@@ -97,3 +97,11 @@ def store_chunks(chunks):
         documents=documents,
         metadatas=metadatas
     )
+
+import chromadb
+
+client = chromadb.PersistentClient(path="chroma_db")
+
+collection = client.get_or_create_collection(
+    name="exam_intelligence"
+)
