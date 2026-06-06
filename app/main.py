@@ -5,7 +5,8 @@ Responsibilities:
 -----------------
 1. Create FastAPI app
 2. Register API routers
-3. Configure application metadata
+3. Configure middleware
+4. Configure metadata
 
 IMPORTANT:
 -----------
@@ -25,6 +26,7 @@ from fastapi.middleware.cors import (
     CORSMiddleware
 )
 
+
 # =========================================================
 # IMPORT ROUTERS
 # =========================================================
@@ -35,6 +37,10 @@ from app.api.upload import (
 
 from app.api.chat import (
     router as chat_router
+)
+
+from app.auth.routes import (
+    router as auth_router
 )
 
 
@@ -83,6 +89,12 @@ app.include_router(
 
 app.include_router(
     chat_router
+)
+
+app.include_router(
+    auth_router,
+    prefix="/auth",
+    tags=["Auth"]
 )
 
 
