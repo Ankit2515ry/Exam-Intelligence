@@ -18,7 +18,7 @@ from app.db.models.user import User
 # READ JWT TOKEN FROM HEADER
 # ====================================
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/auth/login"
+    tokenUrl="auth/auth/login"
 )
 
 

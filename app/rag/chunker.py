@@ -89,7 +89,9 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 def create_chunks(
     pages: List[Dict],
-    document_id: str
+    document_id: str,
+    user_id: int
+
 ) -> List[Dict]:
     """
     Convert parsed pages into chunks.
@@ -160,7 +162,9 @@ def create_chunks(
 
                     "page": page_number,
 
-                    "document_id": document_id,
+                    "document_uuid": document_id,
+
+                    "user_id": user_id,
 
                     "chunk_index": chunk_index
                 }
@@ -169,5 +173,5 @@ def create_chunks(
             chunks.append(chunk)
 
             chunk_index += 1
-
+    print(chunks)
     return chunks

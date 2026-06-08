@@ -9,42 +9,28 @@ Responsibilities:
 4. Delete documents
 5. Expose chunk APIs
 
-IMPORTANT:
------------
-This layer should remain THIN.
 
-It should:
------------
-- validate requests
-- call services
-- return responses
-
-It should NOT:
----------------
-- parse PDFs
-- chunk text
-- generate embeddings
-- manipulate vector DB directly
 """
 
 from fastapi import (
     APIRouter,
     UploadFile,
     File,
-    HTTPException
+    HTTPException,
+    Depends
 )
 
 from fastapi.responses import (
     FileResponse
 )
 
-
-
+from sqlalchemy.orm import Session
 
 import shutil
 import os
 import uuid
-import json
+
+
 
 from app.config.settings import (
     UPLOAD_DIR,
@@ -59,6 +45,25 @@ from app.rag.vectordb import (
     get_chunk_by_id,
     get_document_chunks,
     delete_document_chunks
+)
+
+from app.db.session import get_db
+
+from app.auth.dependencies import (
+    get_current_user
+)
+
+from app.db.models.user import User
+
+from app.db.crud.document import (
+
+    create_document,
+
+    get_user_documents,
+
+    get_document_by_uuid,
+
+    delete_document_record
 )
 
 
@@ -76,11 +81,12 @@ router = APIRouter(
 
 
 
+
 # =========================================================
-# METADATA STORAGE
+# STORAGE SETUP
 # =========================================================
 
-METADATA_FILE = "documents.json"
+
 
 os.makedirs(
     UPLOAD_DIR,
@@ -92,13 +98,7 @@ os.makedirs(
     exist_ok=True
 )
 
-
-# Create metadata file if missing
-if not os.path.exists(METADATA_FILE):
-
-    with open(METADATA_FILE, "w") as f:
-
-        json.dump([], f)
+\
 
 
 # =========================================================
@@ -107,40 +107,62 @@ if not os.path.exists(METADATA_FILE):
 
 @router.post("/upload")
 async def upload_pdf(
-    file: UploadFile = File(...)
+
+    file: UploadFile = File(...),
+
+    current_user: User = Depends(
+        get_current_user
+    ),
+
+    db: Session = Depends(get_db)
 ):
+
     """
     Upload and process PDF.
     """
 
-    # Validate file type
+    # -----------------------------------------------------
+    # VALIDATE FILE TYPE
+    # -----------------------------------------------------
+
     if file.content_type != "application/pdf":
 
         raise HTTPException(
 
             status_code=400,
 
-            detail=(
-                "Only PDF files are allowed"
-            )
+            detail="Only PDF files are allowed"
         )
 
-    # Generate unique document ID
-    document_id = str(uuid.uuid4())
+    # -----------------------------------------------------
+    # GENERATE DOCUMENT UUID
+    # -----------------------------------------------------
 
-    # Create document folder
+    document_uuid = str(uuid.uuid4())
+
+    # -----------------------------------------------------
+    # CREATE DOCUMENT FOLDER
+    # -----------------------------------------------------
+
     document_folder = os.path.join(
         UPLOAD_DIR,
-        document_id
+        document_uuid
     )
 
-    os.makedirs(document_folder)
+    os.makedirs(
+        document_folder,
+        exist_ok=True
+    )
 
-    # Save uploaded file
+    # -----------------------------------------------------
+    # SAVE FILE
+    # -----------------------------------------------------
+
     file_path = os.path.join(
         document_folder,
         file.filename
     )
+
 
 
     with open(file_path, "wb") as buffer:
@@ -150,55 +172,48 @@ async def upload_pdf(
             buffer
         )
 
-    # =====================================================
-    # INGEST DOCUMENT
-    # =====================================================
+    # -----------------------------------------------------
+    # STORE DOCUMENT IN DATABASE
+    # -----------------------------------------------------
 
-    ingestion_result = ingest_document(
-        file_path
+    document = create_document(
+
+        db=db,
+
+        title=file.filename,
+
+        filename=file.filename,
+
+        file_path=file_path,
+
+        subject="General",
+
+        uploaded_by=current_user.id,
+
+        document_uuid=document_uuid
     )
 
-    # =====================================================
-    # SAVE DOCUMENT METADATA
-    # =====================================================
+    # -----------------------------------------------------
+    # INGEST DOCUMENT
+    # -----------------------------------------------------
 
-    document_data = {
+    ingestion_result = ingest_document(
 
-        "document_id": (
-            ingestion_result["document_id"]
-        ),
+        file_path=file_path,
 
-        "filename": file.filename,
+        db=db,
 
-        "path": file_path,
+        document_db_id=document.id,
 
-        "total_pages": (
-            ingestion_result["total_pages"]
-        ),
+        document_uuid=document.document_uuid,
 
-        "total_chunks": (
-            ingestion_result["total_chunks"]
-        ),
+        user_id=current_user.id
+    )
 
-        "status": "processed"
-    }
 
-    # Read metadata
-    with open(METADATA_FILE, "r") as f:
-
-        documents = json.load(f)
-
-    # Add document
-    documents.append(document_data)
-
-    # Save metadata
-    with open(METADATA_FILE, "w") as f:
-
-        json.dump(
-            documents,
-            f,
-            indent=4
-        )
+    # -----------------------------------------------------
+    # RESPONSE
+    # -----------------------------------------------------
 
     return {
 
@@ -206,85 +221,122 @@ async def upload_pdf(
             "PDF uploaded successfully"
         ),
 
-        "document": document_data
+        "document": {
+
+            "id": document.id,
+
+            "document_uuid": (
+                document.document_uuid
+            ),
+
+            "filename": (
+                document.filename
+            ),
+
+            "uploaded_by": (
+                current_user.email
+            ),
+
+            "total_pages": (
+                ingestion_result["total_pages"]
+            ),
+
+            "total_chunks": (
+                ingestion_result["total_chunks"]
+            )
+        }
     }
 
 
 # =========================================================
-# GET ALL DOCUMENTS
+# GET USER DOCUMENTS
 # =========================================================
 
 @router.get("/documents")
-def get_documents():
+def get_documents(
 
+    current_user: User = Depends(
+        get_current_user
+    ),
 
-    with open(METADATA_FILE, "r") as f:
+    db: Session = Depends(get_db)
+):
 
-        documents = json.load(f)
+    documents = get_user_documents(
 
-    valid_documents = []
+        db=db,
 
+        user_id=current_user.id
+    )
 
-    for doc in documents:
-
-        if os.path.exists(doc["path"]):
-
-            valid_documents.append(doc)
-
-    # Cleanup stale entries
-    with open(METADATA_FILE, "w") as f:
-
-        json.dump(
-            valid_documents,
-            f,
-            indent=4
-        )
-
-    return valid_documents
+    return documents
 
 
 # =========================================================
 # VIEW DOCUMENT
 # =========================================================
 
-@router.get("/view/{document_id}")
-def view_document(document_id: str):
+@router.get("/view/{document_uuid}")
+def view_document(
 
+    document_uuid: str,
 
-    with open(METADATA_FILE, "r") as f:
+    current_user: User = Depends(
+        get_current_user
+    ),
 
-        documents = json.load(f)
+    db: Session = Depends(get_db)
+):
 
-    for doc in documents:
+    document = get_document_by_uuid(
 
-        if doc["document_id"] == document_id:
+        db=db,
 
-            if not os.path.exists(
-                doc["path"]
-            ):
+        document_uuid=document_uuid
+    )
 
-                raise HTTPException(
+    if document is None:
 
-                    status_code=404,
+        raise HTTPException(
 
-                    detail=(
-                        "File missing "
-                        "from storage"
-                    )
-                )
+            status_code=404,
 
-            return FileResponse(
+            detail="Document not found"
+        )
 
-                path=doc["path"],
+    # -----------------------------------------------------
+    # SECURITY CHECK
+    # -----------------------------------------------------
 
-                media_type="application/pdf"
-            )
+    if document.uploaded_by != current_user.id:
 
-    raise HTTPException(
+        raise HTTPException(
 
-        status_code=404,
+            status_code=403,
 
-        detail="Document not found"
+            detail="Access denied"
+        )
+
+    # -----------------------------------------------------
+    # FILE EXISTS?
+    # -----------------------------------------------------
+
+    if not os.path.exists(
+        document.file_path
+    ):
+
+        raise HTTPException(
+
+            status_code=404,
+
+            detail="PDF file missing"
+        )
+
+    return FileResponse(
+
+        path=document.file_path,
+
+        media_type="application/pdf"
     )
 
 
@@ -293,8 +345,16 @@ def view_document(document_id: str):
 # =========================================================
 
 @router.get("/chunk/{chunk_id}")
-def get_chunk(chunk_id: str):
+def get_chunk(
 
+    chunk_id: str,
+
+    current_user: User = Depends(
+        get_current_user
+    )
+):
+
+    print("Requested chunk ID:", chunk_id)
     results = get_chunk_by_id(
         chunk_id
     )
@@ -308,13 +368,30 @@ def get_chunk(chunk_id: str):
             detail="Chunk not found"
         )
 
+    metadata = results["metadatas"][0]
+
+    # -----------------------------------------------------
+    # SECURITY CHECK
+    # -----------------------------------------------------
+
+    print("Metadata user_id:", metadata.get("user_id"))
+    print("Current user id:", current_user.id)
+    if metadata.get("user_id") != current_user.id:
+
+        raise HTTPException(
+
+            status_code=403,
+
+            detail="Access denied"
+        )
+
     return {
 
         "chunk_id": results["ids"][0],
 
         "text": results["documents"][0],
 
-        "metadata": results["metadatas"][0]
+        "metadata": metadata
     }
 
 
@@ -322,11 +399,49 @@ def get_chunk(chunk_id: str):
 # GET DOCUMENT CHUNKS
 # =========================================================
 
-@router.get("/chunks/{document_id}")
-def get_chunks(document_id: str):
+@router.get("/chunks/{document_uuid}")
+def get_chunks(
+
+    document_uuid: str,
+
+    current_user: User = Depends(
+        get_current_user
+    ),
+
+    db: Session = Depends(get_db)
+):
+
+    document = get_document_by_uuid(
+
+        db=db,
+
+        document_uuid=document_uuid
+    )
+
+    if document is None:
+
+        raise HTTPException(
+
+            status_code=404,
+
+            detail="Document not found"
+        )
+
+    # -----------------------------------------------------
+    # SECURITY CHECK
+    # -----------------------------------------------------
+
+    if document.uploaded_by != current_user.id:
+
+        raise HTTPException(
+
+            status_code=403,
+
+            detail="Access denied"
+        )
 
     results = get_document_chunks(
-        document_id
+        document_uuid
     )
 
     return results
@@ -336,60 +451,26 @@ def get_chunks(document_id: str):
 # DELETE DOCUMENT
 # =========================================================
 
-@router.delete("/delete/{document_id}")
-def delete_document(document_id: str):
+@router.delete("/delete/{document_uuid}")
+def delete_document(
 
+    document_uuid: str,
 
-    with open(METADATA_FILE, "r") as f:
+    current_user: User = Depends(
+        get_current_user
+    ),
 
-        documents = json.load(f)
+    db: Session = Depends(get_db)
+):
 
-    updated_documents = []
+    document = get_document_by_uuid(
 
-    found = False
+        db=db,
 
-    for doc in documents:
+        document_uuid=document_uuid
+    )
 
-
-        if doc["document_id"] == document_id:
-
-            found = True
-
-            # Delete vectors
-            delete_document_chunks(
-                document_id
-            )
-
-            # Delete original PDF
-            if os.path.exists(doc["path"]):
-
-                os.remove(doc["path"])
-
-            # Delete folder
-            folder_path = os.path.dirname(
-                doc["path"]
-            )
-
-            if os.path.exists(folder_path):
-
-                os.rmdir(folder_path)
-
-        else:
-
-            updated_documents.append(doc)
-
-    # Save updated metadata
-    with open(METADATA_FILE, "w") as f:
-
-        json.dump(
-            updated_documents,
-            f,
-            indent=4
-        )
-
-
-
-    if not found:
+    if document is None:
 
         raise HTTPException(
 
@@ -398,11 +479,65 @@ def delete_document(document_id: str):
             detail="Document not found"
         )
 
+    # -----------------------------------------------------
+    # SECURITY CHECK
+    # -----------------------------------------------------
+
+    if document.uploaded_by != current_user.id:
+
+        raise HTTPException(
+
+            status_code=403,
+
+            detail="Access denied"
+        )
+
+    # -----------------------------------------------------
+    # DELETE CHROMADB VECTORS
+    # -----------------------------------------------------
+
+    delete_document_chunks(
+        document_uuid
+    )
+
+    # -----------------------------------------------------
+    # DELETE PDF FILE
+    # -----------------------------------------------------
+
+    if os.path.exists(
+        document.file_path
+    ):
+
+        os.remove(document.file_path)
+
+    # -----------------------------------------------------
+    # DELETE EMPTY FOLDER
+    # -----------------------------------------------------
+
+    folder_path = os.path.dirname(
+        document.file_path
+    )
+
+    if os.path.exists(folder_path):
+
+        os.rmdir(folder_path)
+
+    # -----------------------------------------------------
+    # DELETE DATABASE RECORD
+    # -----------------------------------------------------
+
+    delete_document_record(
+
+        db=db,
+
+        document=document
+    )
+
     return {
 
         "message": (
             "Document deleted successfully"
         ),
 
-        "document_id": document_id
+        "document_uuid": document_uuid
     }

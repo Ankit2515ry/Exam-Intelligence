@@ -22,6 +22,8 @@ It should NOT contain:
 
 from fastapi import FastAPI
 
+import app.db.models
+
 from fastapi.middleware.cors import (
     CORSMiddleware
 )

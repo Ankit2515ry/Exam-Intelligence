@@ -45,13 +45,22 @@ from app.rag.vectordb import (
     store_chunks
 )
 
+from sqlalchemy.orm import Session
+
+from app.db.crud.chunk import (
+    create_chunk
+)
 
 # =========================================================
 # INGEST DOCUMENT
 # =========================================================
 
 def ingest_document(
-    file_path: str
+    file_path: str,
+    db: Session,
+    document_db_id: int,
+    document_uuid: str,
+    user_id: int
 ) -> Dict:
     """
     Process uploaded PDF document.
@@ -82,7 +91,7 @@ def ingest_document(
     - deletion
     """
 
-    document_id = str(uuid.uuid4())
+    # document_id = str(uuid.uuid4())
 
     # =====================================================
     # PARSE PDF
@@ -97,10 +106,12 @@ def ingest_document(
     # =====================================================
 
     chunks = create_chunks(
-
+ 
         pages=parsed_pages,
 
-        document_id=document_id
+        document_id=document_uuid,
+
+        user_id=user_id
     )
 
     # =====================================================
@@ -110,15 +121,40 @@ def ingest_document(
     store_chunks(chunks)
 
     # =====================================================
+    # STORE CHUNK METADATA IN POSTGRESQL
+    # =====================================================
+
+    for index, chunk in enumerate(chunks):
+
+        metadata = chunk["metadata"]
+
+        create_chunk(
+
+            db=db,
+
+            document_id=document_db_id,
+
+            chunk_index=index,
+
+            content=chunk["text"],
+
+            chroma_id=str(uuid.uuid4()),
+
+            page_number=metadata.get(
+                "page",
+                1
+            ),
+
+            chunk_metadata=metadata
+        )
+    # =====================================================
     # RETURN INGESTION RESULT
     # =====================================================
 
     return {
 
         "status": "success",
-
-        "document_id": document_id,
-
+        
         "total_pages": len(parsed_pages),
 
         "total_chunks": len(chunks)

@@ -141,7 +141,7 @@ def store_chunks(
     embeddings = generate_embeddings(
         texts
     )
-
+    print(metadatas)
     # Store in ChromaDB
     collection.add(
 
@@ -154,6 +154,7 @@ def store_chunks(
         metadatas=metadatas
     )
 
+    print("Stored Chroma IDs:", ids)
 
 # =========================================================
 # SEMANTIC SEARCH
@@ -274,7 +275,7 @@ def delete_document_chunks(
     results = collection.get(
 
         where={
-            "document_id": document_id
+            "document_id": str(document_id)
         }
     )
 

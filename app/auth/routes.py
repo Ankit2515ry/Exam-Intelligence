@@ -10,7 +10,6 @@ from app.db.session import get_db
 
 from app.auth.schemas import (
     UserCreate,
-    UserLogin
 )
 
 from app.db.models.user import User
@@ -30,6 +29,7 @@ router = APIRouter(
     tags=["Authentication"]
 )
 
+from fastapi.security import OAuth2PasswordRequestForm
 
 # =========================
 # SIGNUP API
@@ -64,8 +64,9 @@ def signup(
     new_user = User(
         name=user.name,
         email=email,
-        password=hashed_password
+        hashed_password=hashed_password
     )
+
 
     # Save to database
     db.add(new_user)
@@ -84,19 +85,19 @@ def signup(
 # =========================
 @router.post("/login")
 def login(
-    user: UserLogin,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
 
-    # Normalize email
-    email = user.email.lower().strip()
+    # OAuth form uses username field
+    email = form_data.username.lower().strip()
 
-    # Find user by email
+    # Find user
     existing_user = db.query(User).filter(
         User.email == email
     ).first()
 
-    # Check email exists
+    # Check email
     if not existing_user:
 
         raise HTTPException(
@@ -106,8 +107,8 @@ def login(
 
     # Verify password
     valid_password = verify_password(
-        user.password,
-        existing_user.password
+        form_data.password,
+        existing_user.hashed_password
     )
 
     # Invalid password
