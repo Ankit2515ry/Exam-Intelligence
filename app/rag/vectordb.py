@@ -123,19 +123,20 @@ def store_chunks(
         )
 
         metadatas.append({
-
+ 
             "chunk_id": chunk["chunk_id"],
-
-            "document_id": (
-                chunk["document_id"]
-            ),
-
+            "document_id": chunk["document_id"],
+            "user_id": chunk["metadata"]["user_id"],
             "page": chunk["page"],
-
-            "chunk_index": (
-                chunk["chunk_index"]
-            )
+            "chunk_index": chunk["chunk_index"]
         })
+
+        # metadatas.append({
+        #     **chunk["metadata"],
+        #     "chunk_id": chunk["chunk_id"],
+        #     "document_id": chunk["document_id"]
+        # })
+
 
     # Batch embedding generation
     embeddings = generate_embeddings(
@@ -256,6 +257,9 @@ def get_chunk_by_id(
 
         ids=[chunk_id]
     )
+    print(results)
+
+    metadata = results["metadatas"][0]
 
     return results
 
