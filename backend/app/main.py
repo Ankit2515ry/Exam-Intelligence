@@ -44,7 +44,9 @@ from app.api.chat import (
 from app.auth.routes import (
     router as auth_router
 )
+import shutil
 
+print("TESSERACT PATH =", shutil.which("tesseract"))
 
 # =========================================================
 # CREATE FASTAPI APP
