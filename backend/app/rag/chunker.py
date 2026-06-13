@@ -173,5 +173,5 @@ def create_chunks(
             chunks.append(chunk)
 
             chunk_index += 1
-    print(chunks)
+    # print(chunks)
     return chunks

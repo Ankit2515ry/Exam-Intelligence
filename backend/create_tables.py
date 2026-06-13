@@ -12,4 +12,4 @@ from app.db.models.message import Message
 # Create all tables
 Base.metadata.create_all(bind=engine)
 
-print("Tables created successfully")
+# print("Tables created successfully")

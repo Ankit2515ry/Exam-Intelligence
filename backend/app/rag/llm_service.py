@@ -112,9 +112,9 @@ def generate_answer(
 
     except Exception as error:
 
-        print(
-            f"LLM Error: {error}"
-        )
+        # print(
+        #     f"LLM Error: {error}"
+        # )
 
         return (
             "An error occurred while "

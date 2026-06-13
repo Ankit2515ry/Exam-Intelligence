@@ -23,7 +23,7 @@ All orchestration belongs inside:
 services/chat_service.py
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter,Depends
 
 from app.models.chat import (
     ChatRequest,
@@ -34,6 +34,7 @@ from app.services.chat_service import (
     chat_with_documents
 )
 
+from app.auth.dependencies import get_current_user
 
 # =========================================================
 # ROUTER
@@ -56,7 +57,8 @@ router = APIRouter(
     response_model=ChatResponse
 )
 def chat(
-    request: ChatRequest
+    request: ChatRequest,
+    current_user=Depends(get_current_user)
 ):
     """
     Chat with uploaded documents.
@@ -75,6 +77,8 @@ def chat(
     response = chat_with_documents(
 
         question=request.question,
+
+        user_id=current_user.id,
 
         document_id=request.document_id
     )

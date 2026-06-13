@@ -61,6 +61,7 @@ from app.config.settings import (
 
 def retrieve_relevant_chunks(
     question: str,
+    user_id: int,
     top_k: int = TOP_K,
     document_id: Optional[str] = None
 ) -> List[Document]:
@@ -93,6 +94,8 @@ def retrieve_relevant_chunks(
     results = search_chunks(
 
         query=question,
+
+        user_id=user_id,
 
         top_k=top_k,
 

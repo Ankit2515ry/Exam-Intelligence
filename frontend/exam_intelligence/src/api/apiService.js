@@ -53,7 +53,24 @@ export const uploadService = {
   deleteDocument: async (documentUuid) => {
     const response = await API.delete(`/api/delete/${documentUuid}`);
     return response.data;
+  },
+
+  viewPdf: async (documentUuid) => {
+
+    const response = await API.get(
+      `/api/view/${documentUuid}`,
+      {
+        responseType: "blob"
+      }
+    );
+
+    const pdfUrl = URL.createObjectURL(
+      response.data
+    );
+
+    window.open(pdfUrl, "_blank");
   }
+
 };
 
 // 3. CHAT SERVICE
@@ -69,3 +86,4 @@ export const chatService = {
     return response.data; 
   }
 };
+

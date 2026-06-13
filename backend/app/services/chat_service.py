@@ -61,6 +61,7 @@ from app.config.settings import (
 
 def chat_with_documents(
     question: str,
+    user_id: int,
     document_id: Optional[str] = None
 ) -> Dict:
     """
@@ -87,6 +88,8 @@ def chat_with_documents(
 
         question=question,
 
+        user_id=user_id,
+
         top_k=RERANK_TOP_K,
 
         document_id=document_id
@@ -106,16 +109,32 @@ def chat_with_documents(
     # Keep best chunks after reranking
     final_chunks = reranked_chunks[:5]
 
+    # print("\nRETRIEVED CHUNKS\n")
+
+    for i, chunk in enumerate(final_chunks):
+
+        # print(f"\nChunk {i+1}")
+
+        # print(chunk.page_content)
+
+        # print(chunk.metadata)
+
     # =====================================================
     # STEP 3 — BUILD PROMPT
     # =====================================================
 
-    prompt = build_prompt(
+        prompt = build_prompt(
 
-        question=question,
+            question=question,
 
-        retrieved_chunks=final_chunks
-    )
+            retrieved_chunks=final_chunks
+        )
+
+    # print("\n" + "="*80)
+    # print("PROMPT SENT TO LLM")
+    # print("="*80)
+    # print(prompt)
+    # print("="*80 + "\n")
 
     # =====================================================
     # STEP 4 — GENERATE ANSWER
@@ -124,6 +143,8 @@ def chat_with_documents(
     answer = generate_answer(
         prompt
     )
+
+    # answer = prompt
 
     # =====================================================
     # STEP 5 — BUILD SOURCES
@@ -135,17 +156,28 @@ def chat_with_documents(
 
         metadata = chunk.metadata
 
+        # sources.append({
+
+        #     "page": metadata.get("page"),
+
+        #     "chunk_id": metadata.get(
+        #         "chunk_id"
+        #     ),
+
+        #     "document_id": metadata.get(
+        #         "document_id"
+        #     )
+        # })
+
         sources.append({
 
             "page": metadata.get("page"),
 
-            "chunk_id": metadata.get(
-                "chunk_id"
-            ),
+            "chunk_id": metadata.get("chunk_id"),
 
-            "document_id": metadata.get(
-                "document_id"
-            )
+            "document_id": metadata.get("document_id"),
+
+            "content": chunk.page_content
         })
 
     # =====================================================

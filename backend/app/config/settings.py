@@ -49,11 +49,11 @@ VECTOR_DB_DIR = "chroma_db"
 # =========================================================
 
 # Maximum characters inside one chunk
-CHUNK_SIZE = 500
+CHUNK_SIZE = 250
 
 # Overlapping characters between chunks
 # Helps preserve context continuity
-CHUNK_OVERLAP = 100
+CHUNK_OVERLAP = 50
 
 
 # =========================================================

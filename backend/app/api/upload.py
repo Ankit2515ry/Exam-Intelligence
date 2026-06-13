@@ -354,7 +354,7 @@ def get_chunk(
     )
 ):
 
-    print("Requested chunk ID:", chunk_id)
+    # print("Requested chunk ID:", chunk_id)
     results = get_chunk_by_id(
         chunk_id
     )
@@ -374,8 +374,8 @@ def get_chunk(
     # SECURITY CHECK
     # -----------------------------------------------------
 
-    print("Metadata user_id:", metadata.get("user_id"))
-    print("Current user id:", current_user.id)
+    # print("Metadata user_id:", metadata.get("user_id"))
+    # print("Current user id:", current_user.id)
     if metadata.get("user_id") != current_user.id:
 
         raise HTTPException(

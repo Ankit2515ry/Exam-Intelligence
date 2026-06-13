@@ -183,10 +183,10 @@ class PDFParser:
             # OCR fallback for scanned PDFs
             if len(text.strip()) < 20:
 
-                print(
-                    f"OCR running on page "
-                    f"{page_number + 1}"
-                )
+                # print(
+                #     f"OCR running on page "
+                #     f"{page_number + 1}"
+                # )
 
                 text = self.perform_ocr_on_page(
                     page

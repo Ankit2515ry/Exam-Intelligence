@@ -142,7 +142,7 @@ def store_chunks(
     embeddings = generate_embeddings(
         texts
     )
-    print(metadatas)
+    # print(metadatas)
     # Store in ChromaDB
     collection.add(
 
@@ -155,7 +155,7 @@ def store_chunks(
         metadatas=metadatas
     )
 
-    print("Stored Chroma IDs:", ids)
+    # print("Stored Chroma IDs:", ids)
 
 # =========================================================
 # SEMANTIC SEARCH
@@ -163,6 +163,7 @@ def store_chunks(
 
 def search_chunks(
     query: str,
+    user_id: int,
     top_k: int = 5,
     document_id: Optional[str] = None
 ) -> Dict:
@@ -190,31 +191,65 @@ def search_chunks(
     )
 
     # Metadata filtering support
-    if document_id:
+    # if document_id:
 
-        results = collection.query(
+    #     results = collection.query(
 
-            query_embeddings=[
-                query_embedding
-            ],
+    #         query_embeddings=[
+    #             query_embedding
+    #         ],
 
-            n_results=top_k,
+    #         n_results=top_k,
 
-            where={
-                "document_id": document_id
-            }
-        )
+    #        where={
+    #             "$and": [
+    #                 {"user_id": user_id},
+    #                 {"document_id": document_id}
+    #             ]
+    #         }
+    #     )
 
-    else:
+    # else:
 
-        results = collection.query(
+    #     print("\n====================")
+    #     print("SEARCH USER ID:", user_id)
+    #     print("TYPE:", type(user_id))
+    #     print("DOCUMENT ID:", document_id)
+    #     print("====================\n")
 
-            query_embeddings=[
-                query_embedding
-            ],
+    #     all_data = collection.get()
 
-            n_results=top_k
-        )
+    #     print("\nALL STORED METADATA:")
+    #     print(all_data["metadatas"][:10])
+
+
+    #     results = collection.query(
+
+    #         query_embeddings=[
+    #             query_embedding
+    #         ],
+
+    #         n_results=top_k,
+
+    #         where={
+    #             "user_id": user_id
+    #         }
+    #     )
+
+    #     print("\nQUERY RESULTS:")
+    #     print(results)
+    # print("USER ID RECEIVED:", user_id)
+    # print("TYPE:", type(user_id))
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        where={
+            "user_id": int(user_id)
+        }
+    )
+
+    # print("\nQUERY RESULTS:")
+    # print(results)
 
     return results
 
@@ -257,7 +292,7 @@ def get_chunk_by_id(
 
         ids=[chunk_id]
     )
-    print(results)
+    # print(results)
 
     metadata = results["metadatas"][0]
 
