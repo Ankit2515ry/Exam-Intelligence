@@ -24,6 +24,7 @@ This file will be used by:
 """
 
 import os
+
 from dotenv import load_dotenv
 
 
@@ -37,12 +38,16 @@ load_dotenv()
 
 # Base project folders
 
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 
-CHUNKS_DIR = "chunks"
+CHUNKS_DIR = os.getenv("CHUNKS_DIR", "chunks")
 
-VECTOR_DB_DIR = "chroma_db"
+VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR", "chroma_db")
 
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(CHUNKS_DIR, exist_ok=True)
+os.makedirs(VECTOR_DB_DIR, exist_ok=True)
 
 # =========================================================
 # CHUNKING CONFIGURATION
