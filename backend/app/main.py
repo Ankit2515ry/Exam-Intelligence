@@ -46,7 +46,7 @@ from app.auth.routes import (
 )
 import shutil
 
-print("TESSERACT PATH =", shutil.which("tesseract"))
+# print("TESSERACT PATH =", shutil.which("tesseract"))
 
 # =========================================================
 # CREATE FASTAPI APP
