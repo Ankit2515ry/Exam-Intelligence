@@ -51,7 +51,7 @@ print("TESSERACT PATH =", shutil.which("tesseract"))
 # =========================================================
 # CREATE FASTAPI APP
 # =========================================================
-
+print("step 1: Creating FastAPI app")
 app = FastAPI(
 
     title="Exam Intelligence API",
@@ -64,11 +64,11 @@ app = FastAPI(
     )
 )
 
-
+print("step 2: FastAPI app created successfully")
 # =========================================================
 # CORS MIDDLEWARE
 # =========================================================
-
+print("step 3: Configuring CORS middleware")
 app.add_middleware(
 
     CORSMiddleware,
@@ -81,7 +81,7 @@ app.add_middleware(
 
     allow_headers=["*"],
 )
-
+print("step 4: CORS middleware configured successfully")
 # app.add_middleware(
 
 #     CORSMiddleware,
@@ -99,14 +99,15 @@ app.add_middleware(
 # =========================================================
 # REGISTER ROUTERS
 # =========================================================
-
+print("step 5: Registering API routers")
 app.include_router(
     upload_router
 )
-
+print("step 6: API routers registered successfully")
 app.include_router(
     chat_router
 )
+print("step 7: Chat router registered successfully")
 
 app.include_router(
     auth_router,
@@ -114,7 +115,7 @@ app.include_router(
     tags=["Auth"]
 )
 
-
+print("step 8: Auth router registered successfully")
 # =========================================================
 # HEALTH CHECK
 # =========================================================
@@ -133,3 +134,4 @@ def home():
 
         "status": "healthy"
     }
+print("step 9: Health check endpoint configured successfully")

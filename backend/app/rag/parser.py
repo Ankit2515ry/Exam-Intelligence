@@ -45,14 +45,16 @@ from app.utils.helpers import clean_text
 # WINDOWS ONLY
 # Comment/remove on Linux or Mac
 
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
+# pytesseract.pytesseract.tesseract_cmd = (
+#     r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# )
 
-# if os.name == "nt":
-#     pytesseract.pytesseract.tesseract_cmd = (
-#         r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-#     )
+if os.name == "nt":
+    pytesseract.pytesseract.tesseract_cmd = (
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    )
+
+
 
 
 class PDFParser:
