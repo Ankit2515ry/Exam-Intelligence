@@ -30,9 +30,9 @@ These vectors power:
 
 from typing import List
 
-# from sentence_transformers import (
-#     SentenceTransformer
-# )
+from sentence_transformers import (
+    SentenceTransformer
+)
 
 from app.config.settings import (
     EMBEDDING_MODEL
@@ -57,9 +57,9 @@ Global loading:
 ✅ production-friendly
 """
 
-# embedding_model = SentenceTransformer(
-#     "all-MiniLM-L6-v2"
-# )
+embedding_model = SentenceTransformer(
+    "all-MiniLM-L6-v2"
+)
 
 _model = None
 
