@@ -20,6 +20,14 @@ It should NOT contain:
 - prompt engineering
 """
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI
 
 import app.db.models
@@ -44,6 +52,9 @@ from app.api.chat import (
 from app.auth.routes import (
     router as auth_router
 )
+from app.api.health import (
+    router as health_router
+)
 # import shutil
 '''
 shutil Python ki standard library ka module hai.
@@ -54,7 +65,8 @@ Iska use file aur directory operations ke liye hota hai.
 # =========================================================
 # CREATE FASTAPI APP
 # =========================================================
-print("step 1: Creating FastAPI app")
+# print("step 1: Creating FastAPI app")
+logger.info("Creating FastAPI app")
 app = FastAPI(
 
     title="Exam Intelligence API",
@@ -67,11 +79,13 @@ app = FastAPI(
     )
 )
 
-print("step 2: FastAPI app created successfully")
+# print("step 2: FastAPI app created successfully")
+logger.info("FastAPI app created")
 # =========================================================
 # CORS MIDDLEWARE
 # =========================================================
-print("step 3: Configuring CORS middleware")
+# print("step 3: Configuring CORS middleware")
+logger.info("Configuring CORS middleware")
 app.add_middleware(
 
     CORSMiddleware,
@@ -84,7 +98,8 @@ app.add_middleware(
 
     allow_headers=["*"],
 )
-print("step 4: CORS middleware configured successfully")
+# print("step 4: CORS middleware configured successfully")
+logger.info("CORS middleware configured")
 # app.add_middleware(
 
 #     CORSMiddleware,
@@ -102,15 +117,18 @@ print("step 4: CORS middleware configured successfully")
 # =========================================================
 # REGISTER ROUTERS
 # =========================================================
-print("step 5: Registering API routers")
+# print("step 5: Registering API routers")
+logger.info("Registering API routers")
 app.include_router(
     upload_router
 )
-print("step 6: API routers registered successfully")
+# print("step 6: API routers registered successfully")
+logger.info("Upload router registered")
 app.include_router(
     chat_router
 )
-print("step 7: Chat router registered successfully")
+# print("step 7: Chat router registered successfully")
+logger.info("Chat router registered")
 
 app.include_router(
     auth_router,
@@ -118,7 +136,10 @@ app.include_router(
     tags=["Auth"]
 )
 
-print("step 8: Auth router registered successfully")
+# print("step 8: Auth router registered successfully")
+logger.info("Authentication router registered")
+app.include_router(health_router)
+logger.info("Health router registered")
 # =========================================================
 # HEALTH CHECK
 # =========================================================
@@ -126,7 +147,9 @@ print("step 8: Auth router registered successfully")
 @app.get("/")
 def home():
     """
-    Health check endpoint.
+    Informational root endpoint.
+
+    Use /health/live and /health/ready for health probes.
     """
 
     return {
@@ -135,9 +158,15 @@ def home():
             "Exam Intelligence API Running"
         ),
 
-        "status": "healthy"
+        "status": "running"
     }
-print("step 9: Health check endpoint configured successfully")
+'''
+Liveness
+Readiness
+Tests and smoke checks 
+'''
+# print("step 9: Health check endpoint configured successfully")
+logger.info("Application routes configured")
 
 
 

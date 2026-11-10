@@ -30,6 +30,7 @@ LLM
 Grounded Response
 """
 
+import logging
 from typing import Dict, Optional
 
 #from torch import chunk
@@ -53,6 +54,8 @@ from app.rag.llm_service import (
 from app.config.settings import (
     RERANK_TOP_K
 )
+
+logger = logging.getLogger(__name__)
 
 
 # =========================================================
@@ -80,6 +83,12 @@ def chat_with_documents(
     Generated answer + sources
     """
 
+    logger.info(
+        "Starting chat request user_id=%s document_id=%s",
+        user_id,
+        document_id or "all",
+    )
+
     # =====================================================
     # STEP 1 — RETRIEVE CHUNKS
     # =====================================================
@@ -93,6 +102,11 @@ def chat_with_documents(
         top_k=RERANK_TOP_K,
 
         document_id=document_id
+    )
+    logger.info(
+        "Retrieved chunks for chat user_id=%s count=%s",
+        user_id,
+        len(retrieved_chunks),
     )
 
     # =====================================================
@@ -108,6 +122,11 @@ def chat_with_documents(
 
     # Keep best chunks after reranking
     final_chunks = reranked_chunks[:5]
+    logger.info(
+        "Selected chunks for chat user_id=%s count=%s",
+        user_id,
+        len(final_chunks),
+    )
 
     # print("\nRETRIEVED CHUNKS\n")
 
@@ -142,6 +161,11 @@ def chat_with_documents(
 
     answer = generate_answer(
         prompt
+    )
+    logger.info(
+        "Generated chat answer user_id=%s source_count=%s",
+        user_id,
+        len(final_chunks),
     )
 
     # answer = prompt

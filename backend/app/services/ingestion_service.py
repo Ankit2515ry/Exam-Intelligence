@@ -33,6 +33,7 @@ while low-level logic remains inside:
 """
 
 import uuid
+import logging
 from typing import Dict
 
 from app.rag.parser import PDFParser
@@ -50,6 +51,8 @@ from sqlalchemy.orm import Session
 from app.db.crud.chunk import (
     create_chunk
 )
+
+logger = logging.getLogger(__name__)
 
 # =========================================================
 # INGEST DOCUMENT
@@ -74,6 +77,12 @@ def ingest_document(
     --------
     Document ingestion summary
     """
+
+    logger.info(
+        "Starting document ingestion document_uuid=%s user_id=%s",
+        document_uuid,
+        user_id,
+    )
 
     # =====================================================
     # GENERATE DOCUMENT ID
@@ -113,12 +122,22 @@ def ingest_document(
 
         user_id=user_id
     )
+    logger.debug(
+        "Created document chunks document_uuid=%s count=%s",
+        document_uuid,
+        len(chunks),
+    )
 
     # =====================================================
     # STORE IN VECTOR DB
     # =====================================================
 
     store_chunks(chunks)
+    logger.debug(
+        "Stored document vectors document_uuid=%s count=%s",
+        document_uuid,
+        len(chunks),
+    )
 
     # =====================================================
     # STORE CHUNK METADATA IN POSTGRESQL
@@ -151,7 +170,7 @@ def ingest_document(
     # RETURN INGESTION RESULT
     # =====================================================
 
-    return {
+    result = {
 
         "status": "success",
         
@@ -159,3 +178,10 @@ def ingest_document(
 
         "total_chunks": len(chunks)
     }
+    logger.info(
+        "Document ingestion finished document_uuid=%s pages=%s chunks=%s",
+        document_uuid,
+        result["total_pages"],
+        result["total_chunks"],
+    )
+    return result

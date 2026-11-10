@@ -62,6 +62,30 @@ Bash
 uvicorn app.main:app --reload
 The backend API documentation interface will be accessible at: http://localhost:8000/docs
 
+### Backend health checks and tests
+
+- `GET /health/live` is a liveness check. It confirms the API process can respond and does not contact dependencies.
+- `GET /health/ready` is a readiness check. It checks the relational database and ChromaDB and returns HTTP 503 if either is unavailable. It does not call Gemini or run document ingestion.
+- The root path (`/`) is informational; use the health paths for deployment probes.
+
+Run the backend health endpoint tests from the `backend/` directory with the virtual environment activated:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+### Backend logs
+
+The backend uses Python's standard logging module at `INFO` level. Logs are written to the console stream, so view them in the same terminal where you run Uvicorn:
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload
+```
+
+In production, check the hosting provider's application/runtime logs; container platforms collect console output automatically. The application does not currently write logs to a local file.
+
 💻 Frontend Configuration & Setup
 Open a new terminal and navigate to the frontend directory:
 

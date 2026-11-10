@@ -32,12 +32,16 @@ NOT:
 - vector DB operations
 """
 
+import logging
+
 import google.generativeai as genai
 
 from app.config.settings import (
     GOOGLE_API_KEY,
     LLM_MODEL
 )
+
+logger = logging.getLogger(__name__)
 
 
 # =========================================================
@@ -110,11 +114,12 @@ def generate_answer(
 
         return response.text
 
-    except Exception as error:
+    except Exception:
 
         # print(
-        #     f"LLM Error: {error}"
+        #     "LLM Error"
         # )
+        logger.exception("LLM answer generation failed")
 
         return (
             "An error occurred while "
