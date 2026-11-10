@@ -428,3 +428,39 @@ PYTHON MODULES, PACKAGES AND IMPORT SYSTEM
 END OF TOPIC SUMMARY
 =========================================================
 """
+
+
+"""
+LOGGING SUMMARY
+---------------
+Logging helps monitor application activities, track errors, and debug issues.
+
+Log Levels:
+- DEBUG: Detailed information for debugging.
+- INFO: Normal application events and progress.
+- WARNING: Potential issues that don't stop execution.
+- ERROR: Failures during specific operations.
+- CRITICAL: Serious failures affecting the application.
+
+Common Uses:
+- Track application startup and shutdown.
+- Monitor API requests and responses.
+- Track model loading and AI operations.
+- Monitor document upload and processing.
+- Debug RAG retrieval and Gemini responses.
+- Identify errors and performance issues.
+
+Log Output:
+- StreamHandler: Displays logs in the terminal.
+- FileHandler: Saves logs in a file (e.g., app.log).
+
+Benefits:
+- Makes application behavior easier to understand.
+- Helps identify where and why errors occur.
+- Makes debugging and maintenance easier.
+- Provides visibility into backend operations.
+
+Note:
+Logging does not fix errors; it helps identify,
+understand, and troubleshoot them.
+"""
