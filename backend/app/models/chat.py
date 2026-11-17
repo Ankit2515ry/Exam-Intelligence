@@ -17,8 +17,9 @@ Pydantic models provide:
 """
 
 from typing import List, Optional
+from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, UUID4, field_validator
 
 
 # =========================================================
@@ -60,7 +61,26 @@ class ChatRequest(BaseModel):
     #
     # If None:
     # search all uploaded PDFs
-    document_id: Optional[str] = None
+    document_id: Optional[UUID4] = None
+
+    @field_validator("document_id", mode="before")
+    @classmethod
+    def validate_canonical_document_uuid(cls, value):
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            raise ValueError("Document ID must be a UUID string")
+
+        try:
+            parsed = UUID(value)
+        except ValueError as exc:
+            raise ValueError("Document ID must be a valid UUID") from exc
+
+        if str(parsed) != value.lower():
+            raise ValueError("Document ID must use canonical UUID format")
+
+        return parsed
 
 
 # =========================================================

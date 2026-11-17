@@ -57,6 +57,10 @@ from app.config.settings import (
 
 logger = logging.getLogger(__name__)
 
+NO_CONTEXT_ANSWER = (
+    "I could not find relevant information in the uploaded documents."
+)
+
 
 # =========================================================
 # CHAT WITH DOCUMENTS
@@ -109,6 +113,18 @@ def chat_with_documents(
         len(retrieved_chunks),
     )
 
+    if not retrieved_chunks:
+        logger.info(
+            "No relevant document context found for user_id=%s document_id=%s",
+            user_id,
+            document_id or "all",
+        )
+        return {
+            "question": question,
+            "answer": NO_CONTEXT_ANSWER,
+            "sources": []
+        }
+
     # =====================================================
     # STEP 2 — RERANK CHUNKS
     # =====================================================
@@ -128,26 +144,28 @@ def chat_with_documents(
         len(final_chunks),
     )
 
-    # print("\nRETRIEVED CHUNKS\n")
-
-    for i, chunk in enumerate(final_chunks):
-
-        # print(f"\nChunk {i+1}")
-
-        # print(chunk.page_content)
-
-        # print(chunk.metadata)
+    if not final_chunks:
+        logger.info(
+            "No document context remained after reranking for user_id=%s document_id=%s",
+            user_id,
+            document_id or "all",
+        )
+        return {
+            "question": question,
+            "answer": NO_CONTEXT_ANSWER,
+            "sources": []
+        }
 
     # =====================================================
     # STEP 3 — BUILD PROMPT
     # =====================================================
 
-        prompt = build_prompt(
+    prompt = build_prompt(
 
-            question=question,
+        question=question,
 
-            retrieved_chunks=final_chunks
-        )
+        retrieved_chunks=final_chunks
+    )
 
     # print("\n" + "="*80)
     # print("PROMPT SENT TO LLM")

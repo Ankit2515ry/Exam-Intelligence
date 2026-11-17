@@ -1,11 +1,96 @@
 # Phase 1 baseline report
 
-Review date: 2026-11-17. Phase 1 records current behavior. It does not repair the
-business-logic defects or change the RAG algorithm. Machine-readable measurements
-are in [baseline_results.json](baseline_results.json); the test design and limits
-are in [TESTING_STRATEGY.md](TESTING_STRATEGY.md).
+Review date: 2026-11-17. This report preserves the Phase 1 baseline and records the
+Phase 2A correctness comparison. Machine-readable measurements now represent the
+Phase 2A implementation in [baseline_results.json](baseline_results.json); the test
+design and limits remain in [TESTING_STRATEGY.md](TESTING_STRATEGY.md).
 
-## Execution summary
+## Phase 2A results: document-specific retrieval and chat correctness
+
+The authoritative backend run completed with **55 passed, 7 strict expected
+failures, 0 failed, 0 errors, 0 unexpected passes, 0 skipped, and 1 warning in
+11.42 seconds**. A second complete run without coverage completed with the same
+test outcomes in 8.70 seconds. The suite now contains 62 cases: five former xfails
+are normal passing regressions, and three ownership/global/no-context guards were
+added.
+
+Coverage remains **82% displayed**: 845 statements, 687 covered lines, 158 missing
+lines, 81.79% combined exact coverage, 81.30% statement coverage, and 85.34%
+branch coverage (99 of 116 branches). The single warning remains Starlette's
+TestClient deprecation notice.
+
+Frontend verification passed:
+
+| Command | Result |
+|---|---|
+| `npm.cmd run lint` | Exit 0; no reported errors or warnings |
+| `npm.cmd run build -- --outDir node_modules/.cache/phase2a-build` | Exit 0; 1,807 modules transformed; completed in 832 ms |
+
+The following strict expected failures became normal passing regression tests:
+
+- `test_document_specific_search_excludes_other_documents`
+- `test_numeric_document_id_is_rejected_at_uuid_contract`
+- `test_empty_retrieval_returns_a_response_without_crashing`
+- `test_missing_chunk_lookup_returns_empty_results`
+- `test_missing_chunk_api_returns_404`
+
+Additional tests now verify that global scope searches every owned document while
+excluding other users, that the route forwards no global document filter, that an
+owned document with no indexed context returns without an LLM call, and that
+another user's selected document is rejected before retrieval. A missing
+owned-document UUID returns 404; a valid UUID belonging to another user returns
+403. Canonical UUIDv4 request validation rejects the former numeric ID payload
+with 422.
+
+### Synthetic before/after comparison
+
+The same controlled document-membership fixture was used before and after. These
+values measure metadata isolation only and are not production retrieval accuracy.
+
+| Measurement | Phase 1 | Phase 2A |
+|---|---:|---:|
+| Owner chunks available across two documents | 4 | 4 |
+| Requested-document chunks available | 2 | 2 |
+| Chunks returned for selected document | 4 | 2 |
+| Requested-document matches | 2 | 2 |
+| Document-scope precision | 0.50 | 1.00 |
+| Other-document fraction | 0.50 | 0.00 |
+| Other-user fraction | 0.00 | 0.00 |
+| Prompt builds for five final chunks | 5 | 1 |
+
+The selected-document query now combines authenticated integer user ID and
+document UUID in Chroma's metadata filter. Global scope retains the user-only
+filter. The fixed regression also inserts a different user's chunk carrying the
+selected UUID and confirms that it is excluded.
+
+When retrieval returns no chunks, the service now returns the existing response
+shape with the original question, an empty `sources` list, and:
+
+```text
+I could not find relevant information in the uploaded documents.
+```
+
+The prompt builder and Gemini service are not called on that path. With context,
+the prompt is built once and Gemini is called once. Missing chunk lookup now
+returns an empty Chroma result to the route, which produces HTTP 404 while the
+existing ownership check still protects present chunks.
+
+### Remaining strict expected failures
+
+Seven expected failures remain and were intentionally left unchanged:
+
+- BUG-05: SQL `chroma_id` values do not match actual Chroma chunk IDs.
+- BUG-06 parse failure: document row and PDF remain.
+- BUG-06 embedding failure: document row and PDF remain.
+- BUG-06 vector-write failure: document row, PDF, and vectors remain.
+- BUG-06 first SQL-write failure: document row, PDF, and vectors remain.
+- BUG-06 second SQL-write failure: one SQL chunk plus document, PDF, and vectors remain.
+- BUG-06D: deletion cleanup can leave SQL state after PDF/vector removal.
+
+Phase 2A did not change chunking, embeddings, BM25, hybrid fusion, reranking,
+prompt content, candidate counts, ingestion transactions, or chunk-ID persistence.
+
+## Phase 1 execution summary (historical)
 
 The authoritative backend command was run from `backend/`:
 
@@ -64,7 +149,7 @@ All eight synthetic measurement groups were identical across two full suite runs
 This is a reproducibility check of the fixtures and doubles, not evidence that
 real-model results are deterministic.
 
-## Original health-test limitations
+## Phase 1 original health-test limitations (historical)
 
 The retained three tests correctly verify the response shape and call behavior for
 liveness, successful readiness, and a mocked database failure. Their dependency
@@ -78,7 +163,7 @@ successful readiness, both single-dependency failures, simultaneous failures, an
 recovery. It still makes no claim about a live PostgreSQL server, persistent Chroma
 after restart, Gemini availability, or Tesseract availability.
 
-## Confirmed defects
+## Phase 1 confirmed defects (historical)
 
 | ID | Test evidence | Current result |
 |---|---|---|
@@ -90,11 +175,12 @@ after restart, Gemini availability, or Tesseract availability.
 | BUG-06 | Five parameterized ingestion-failure tests | Parse/embedding failures left a document row and PDF. Vector-write and SQL failures also left four vectors; failure at the second SQL chunk left one committed SQL chunk. |
 | BUG-06D | `test_cleanup_failure_preserves_consistent_document_state` | A nonempty document directory caused deletion to fail after vectors and PDF were removed, while the SQL document remained. |
 
-These are reproduction tests. Their desired invariants are proposals for Phase 2,
-not fixes implemented in Phase 1. The numeric-ID test exercises the current HTTP
-contract using the value shape produced by `Chat.jsx`; it is not a browser test.
+At the Phase 1 checkpoint these were reproduction tests rather than implemented
+fixes. Phase 2A has since repaired BUG-01 through BUG-04. The numeric-ID test
+exercises the HTTP contract using the former `Chat.jsx` value shape; it is not a
+browser test.
 
-## Reproducible synthetic baseline
+## Phase 1 reproducible synthetic baseline (historical)
 
 The harness loads no local `.env`, does not open production SQL/Chroma paths, uses
 temporary SQLite files and a fresh in-memory Chroma collection per case, generates
@@ -206,19 +292,15 @@ updates state from the promise completion, and uses a cleanup flag to ignore sta
 responses. The existing `loadDocs` helper still refreshes after upload and deletion.
 No route, API contract, user-facing feature, or RAG behavior was changed.
 
-## Phase 2 recommendations
+## Recommendations after Phase 2A
 
-1. Make document UUID the canonical UI/API/vector identifier, validate it at the
-   boundary, verify ownership, and combine user plus document filters in Chroma.
-2. Define explicit empty-retrieval and missing-chunk contracts, then remove the
-   associated strict xfails only after those tests pass normally.
-3. Store each actual Chroma chunk ID in its SQL row and reconcile existing data if
+1. Store each actual Chroma chunk ID in its SQL row and reconcile existing data if
    any production records depend on the incorrect references.
-4. Design ingestion/deletion compensation and transaction boundaries before coding:
+2. Design ingestion/deletion compensation and transaction boundaries before coding:
    avoid per-chunk commits, record processing state if needed, and make retries or
    reconciliation safe across SQL, Chroma and filesystem stores.
-5. Rerun the complete suite and regenerate baseline JSON after every approved fix.
-6. Agree on a representative, permitted evaluation corpus and scoring protocol
+3. Rerun the complete suite and regenerate baseline JSON after every approved fix.
+4. Agree on a representative, permitted evaluation corpus and scoring protocol
    before changing chunking, retrieval, ranking, prompting, or model selection.
 
-Phase 1 stops here. None of these business-logic or RAG changes has been implemented.
+Phase 2A stops here. Phase 2B and Phase 2C have not been implemented.

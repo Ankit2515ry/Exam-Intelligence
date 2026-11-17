@@ -62,11 +62,13 @@ record, parses pages, chunks text, batches embeddings into Chroma, and commits S
 chunk records individually. These stores do not share a transaction. A failure
 can leave a document record, file, vectors, and some chunks behind.
 
-A question is embedded and searched against Chroma with a user-ID filter.
-Requested document filtering is currently ignored. Up to ten vector candidates
-are narrowed to five by BM25, scored by hybrid fusion, reranked, and used in the
-Gemini prompt. The response carries the answer plus source metadata and excerpts.
-No previous chat turns are included in the request or prompt.
+A question is embedded and searched against Chroma with a user-ID filter. When a
+document is selected, the API validates its canonical UUID and SQL ownership, and
+Chroma combines that UUID with the user-ID filter. Global scope uses the user-only
+filter. Up to ten vector candidates are narrowed to five by BM25, scored by hybrid
+fusion, reranked, and used in one Gemini prompt. Empty retrieval returns a clear
+response without calling Gemini. The response carries the answer plus source
+metadata and excerpts. No previous chat turns are included in the request or prompt.
 
 The dashboard lists the current user's documents. PDF viewing and deletion check
 SQL ownership; chunk lookup checks stored ownership metadata. Deletion removes
@@ -84,13 +86,14 @@ chunks. Failures can leave partial deletion.
 
 `CHUNKS_DIR` is created but is not the active chunk persistence mechanism.
 Chat-session and message tables exist, but the chat endpoint does not persist to
-them. SQL document integer IDs and public document UUIDs are distinct. The current
-chat selector sends the former, while vector metadata stores the latter.
+them. SQL document integer IDs and public document UUIDs are distinct. The chat
+selector and vector metadata now use the public document UUID.
 
 ## Security and external data transfer
 
 Protected routes use bearer authentication and the ownership checks described
-above. The selected-document bug does not remove the active user-ID filter.
+above. Selected-document chat validates ownership before retrieval, while Chroma
+also applies the authenticated user ID to both global and document-scoped search.
 CORS currently permits all origins/methods/headers with credentials enabled.
 PDF validation checks the client-declared MIME type; a file-size limit, content
 validation, and safe filename normalization are not implemented in the route.
@@ -114,7 +117,8 @@ work without background processing. No throughput or latency claim is establishe
 
 The frontend has no protected-route wrapper or centralized expired-token recovery.
 LLM failures become a generic answer string inside a normal chat response. Empty
-retrieval and missing chunks can instead become unhandled 500 responses.
+retrieval returns a no-context answer without calling Gemini, and missing chunks
+return 404.
 
 ## Phase 1 testing topology (not production architecture)
 
@@ -124,11 +128,10 @@ in-memory Chroma collection per case, synthetic PDFs, model doubles, and blocked
 outbound networking. No production stores, uploaded files, or model caches are
 opened. This test topology must not be confused with the application deployment.
 
-## Proposed Phase 2 improvements: not implemented
+## Proposed improvements after Phase 2A: not implemented
 
-First repair document UUID contracts/filtering, empty/missing-result handling,
-chunk-ID consistency, and recoverable ingestion/deletion. Run the strict
-regressions after each repair and convert the relevant expected failures to normal
-tests. Then agree on an evaluation corpus and measure real model behavior before
-changing candidate selection, ranking, chunking, or prompting. No infrastructure
-expansion is proposed as a prerequisite for those fixes.
+Next repair chunk-ID consistency and recoverable ingestion/deletion. Run the strict
+regressions after each repair and convert only the relevant expected failures to
+normal tests. Then agree on an evaluation corpus and measure real model behavior
+before changing candidate selection, ranking, chunking, or prompting. No
+infrastructure expansion is proposed as a prerequisite for those fixes.

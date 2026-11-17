@@ -138,7 +138,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [documents, setDocuments] = useState([]);
-  const [selectedDocId, setSelectedDocId] = useState("");
+  const [selectedDocumentUuid, setSelectedDocumentUuid] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export default function Chat() {
         setDocuments(data);
 
         if (data.length > 0) {
-          setSelectedDocId(data[0].id);
+          setSelectedDocumentUuid(data[0].document_uuid);
         }
       } catch (err) {
         console.error(err);
@@ -180,7 +180,7 @@ export default function Chat() {
     try {
       const response = await chatService.sendMessage(
         currentInput,
-        selectedDocId ? String(selectedDocId) : null
+        selectedDocumentUuid || null
       );
 
       setMessages((prev) => [
@@ -247,14 +247,14 @@ export default function Chat() {
           </label>
 
           <select
-            value={selectedDocId}
-            onChange={(e) => setSelectedDocId(e.target.value)}
+            value={selectedDocumentUuid}
+            onChange={(e) => setSelectedDocumentUuid(e.target.value)}
             className="w-full bg-slate-900 text-white border border-slate-700 rounded-md p-1.5 text-xs focus:outline-none"
           >
             <option value="">Global System Scope</option>
 
             {documents.map((doc) => (
-              <option key={doc.id} value={doc.id}>
+              <option key={doc.document_uuid} value={doc.document_uuid}>
                 {doc.filename}
               </option>
             ))}

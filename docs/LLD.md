@@ -9,7 +9,7 @@ changes are listed separately at the end. Paths below are relative to the repo.
 |---|---|
 | `backend/app/main.py` | Logging, FastAPI object, wildcard CORS, router registration, informational root |
 | `app/api/upload.py` | Upload, document list/view/delete, single/document chunk APIs |
-| `app/api/chat.py` | Validate chat input, get current user, call orchestration, validate output |
+| `app/api/chat.py` | Validate chat input, load current user, verify selected-document existence/ownership, call orchestration, validate output |
 | `app/api/health.py` | Liveness and SQL/Chroma readiness checks |
 | `app/api/documents.py` | Empty; no registered functionality |
 | `app/auth/routes.py` | Signup/login database and token flow |
@@ -56,7 +56,7 @@ Protected routes require `Authorization: Bearer <JWT>`.
 | GET `/api/documents` | Bearer token | Array of SQL document objects belonging to user |
 | GET `/api/view/{document_uuid}` | UUID path parameter | PDF bytes; 404 missing record/file, 403 non-owner |
 | GET `/api/chunks/{document_uuid}` | UUID path parameter | Raw Chroma get result with parallel IDs/documents/metadatas arrays; 404 missing record, 403 non-owner |
-| GET `/api/chunk/{chunk_id}` | Chunk ID | `{chunk_id, text, metadata}`; 403 wrong owner; missing chunk currently 500 before intended 404 |
+| GET `/api/chunk/{chunk_id}` | Chunk ID | `{chunk_id, text, metadata}`; 403 wrong owner; 404 missing chunk |
 | DELETE `/api/delete/{document_uuid}` | UUID path parameter | `{message, document_uuid}`; 404 missing, 403 non-owner, unhandled failures may leave partial state |
 | POST `/api/chat` | JSON described below | `ChatResponse`; 401 no/invalid authentication, 422 missing required question, unhandled pipeline exceptions become 500 |
 
@@ -78,7 +78,11 @@ serialized document columns include integer `id`, UUID string `document_uuid`,
 
 `question` is a required string with no nonempty/length constraint. `top_k` is an
 integer defaulting to 5 but is not forwarded to the service. `document_id` is an
-optional plain string, not UUID-validated; numeric strings are accepted.
+optional canonical UUIDv4 string. Numeric, noncanonical, non-v4, and non-string
+values fail request validation with 422. A UUID with no SQL document returns 404;
+a document belonging to another authenticated user returns 403. The route passes
+the normalized UUID string to the service only after ownership succeeds. `null` or
+an omitted field selects global scope.
 
 ```json
 {
@@ -123,8 +127,9 @@ There are three different ID concepts:
    Chroma metadata's `document_id`.
 3. Chunk UUID: Chroma primary ID and metadata's `chunk_id`.
 
-The current chat dropdown uses `doc.id`, although Chroma uses `doc.document_uuid`.
-In ingestion, SQL `chroma_id` is assigned a *new* UUID rather than the chunk UUID
+The chat dropdown now uses `doc.document_uuid`, matching the identifier stored in
+Chroma metadata and accepted by the chat request. In ingestion, SQL `chroma_id` is
+still assigned a *new* UUID rather than the chunk UUID
 already stored in Chroma. The consistency defect is engine-independent; Phase 1
 reproduces the real CRUD path with SQLite, not a live PostgreSQL server.
 
@@ -177,11 +182,13 @@ The SQL metadata additionally carries `document_uuid` from the chunker.
 
 ## Retrieval and generation algorithm
 
-1. The route forwards question, authenticated integer user ID and optional
-   document string; `request.top_k` is discarded.
+1. The route validates an optional canonical UUIDv4, loads the SQL document and
+   verifies ownership. It forwards question, authenticated integer user ID and
+   normalized UUID string; `request.top_k` is still discarded.
 2. The service requests `RERANK_TOP_K=10` vector candidates. `search_chunks`
-   embeds the question, then queries Chroma with `where={"user_id": int(user_id)}`.
-   Its `document_id` argument is currently unused.
+   embeds the question. Global scope uses `where={"user_id": int(user_id)}`.
+   Document scope uses Chroma `$and` with that user ID and the selected document
+   UUID. Both layers therefore enforce selected-document isolation.
 3. The retriever constructs LangChain Documents, carrying `score=1-distance`.
    The collection has no explicitly configured distance metric in this code.
 4. BM25 indexes only those candidates with whitespace tokenization; it does not
@@ -193,25 +200,29 @@ The SQL metadata additionally carries `document_uuid` from the chunker.
 6. The cross-encoder scores `(question, passage)` pairs and sorts descending.
    The service keeps up to five. Cross-encoder score determines final order;
    prior hybrid order only survives ties after candidate selection.
-7. Due to indentation, the complete prompt is rebuilt once per selected chunk.
-   With zero chunks, `prompt` is never assigned and generation raises
-   `UnboundLocalError` before any Gemini call.
-8. The prompt joins passage text, asks for document-first answers, allows a
+7. If initial retrieval is empty, or no passage remains after reranking, the
+   service returns the existing `{question, answer, sources}` shape with an empty
+   source list and a clear no-context answer. It does not build a prompt or call
+   Gemini on this path.
+8. With context, the complete prompt is built exactly once. It joins passage text,
+   asks for document-first answers, allows a
    disclosed general-knowledge fallback, and instructs separate answers to
    multiple questions. Page/chunk/document metadata is not put into the prompt.
 9. Gemini's synchronous `generate_content` is called once. Successful text is
    returned; empty text and exceptions become generic answer strings.
 10. Selected chunks become source objects independently of the generated answer.
 
-No RAG algorithms, weights, models, candidate counts, or prompts changed in Phase 1.
+Phase 2A changed filtering and control flow only. It did not change retrieval
+weights, models, candidate counts, chunking, BM25, hybrid scoring, reranking, or
+prompt content.
 
 ## Document management and error handling
 
 List queries filter `uploaded_by`. View/chunks/delete fetch a UUID and return 404
 for no record, then 403 for an ownership mismatch. View returns 404 for a missing
-file. Single-chunk lookup calls Chroma and indexes `metadatas[0]` before the route's
-empty check, so a missing ID raises `IndexError` and an HTTP 500. An existing chunk
-checks metadata's owner before returning text.
+file. Single-chunk lookup now returns Chroma's empty result unchanged, allowing the
+route to return 404 before reading metadata. An existing chunk still checks the
+stored user ID before returning text, preserving the 403 ownership behavior.
 
 Deletion queries vector IDs and deletes them, removes the file if present, uses
 `os.rmdir` for the directory, then deletes/commits the SQL record. A nonempty
@@ -227,8 +238,8 @@ active SQL document table, or reconciliation job.
 | Invalid login | 401, distinguishes email/password errors |
 | Declared non-PDF | 400 before saving anything |
 | Invalid PDF / OCR / embedding / vector / SQL ingestion error | Logs and propagates; usually 500 with partial artifacts |
-| Empty retrieval | UnboundLocalError -> 500 |
-| Missing chunk | IndexError -> 500 |
+| Empty retrieval | 200 with original question, clear no-context answer and `sources: []`; no prompt or Gemini call |
+| Missing chunk | 404 `Chunk not found` |
 | Gemini error | Logs, returns generic answer text within 200 chat response |
 | SQL or vector readiness failure | Logs and returns 503; both checks still attempted |
 
@@ -238,7 +249,8 @@ Dashboard reloads documents after upload/delete. PDF viewing requests a bearer-
 authenticated blob and opens an object URL. Chat stores messages only in component
 state, sends the current question only, and renders answer strings directly rather
 than through Markdown. Source cards display page and excerpt, without a linked PDF
-page or document filename. Routes have no authentication wrapper.
+page or document filename. The selector stores and submits `document_uuid`; its
+empty option submits `null` for global user scope. Routes have no authentication wrapper.
 
 Before the Phase 1 repair, Dashboard's initial effect called component helper
 `loadDocs`, which led to `setDocuments` and triggered the configured
@@ -247,22 +259,21 @@ effect, with state updated in its promise callback and an unmount cleanup flag.
 The existing helper still refreshes after upload/delete. The cause was recorded in
 [BASELINE_REPORT.md](BASELINE_REPORT.md) before this limited edit.
 
-## Regression mapping and proposed Phase 2 behavior
+## Regression mapping after Phase 2A
 
-All cases below live in `backend/tests/regression/test_known_bugs.py` and are
-strict expected failures while the current bugs remain.
+All cases below live in `backend/tests/regression/test_known_bugs.py`. Phase 2A
+converted only the repaired cases to normal tests.
 
-| ID | Test | Proposed invariant (not implemented) |
+| ID | Test | Phase 2A status |
 |---|---|---|
-| BUG-01 | `test_document_specific_search_excludes_other_documents` | Both owner and requested UUID constrain search |
-| BUG-02 | `test_numeric_document_id_is_rejected_at_uuid_contract` | Canonical UUID boundary rejects numeric selection; UI must send UUID |
-| BUG-03 | `test_empty_retrieval_returns_a_response_without_crashing` | Explicit non-crashing empty-result response |
-| BUG-04 | `test_missing_chunk_lookup_returns_empty_results`, `test_missing_chunk_api_returns_404` | Empty lookup is safe; route returns 404 |
-| BUG-05 | `test_sql_chunk_ids_match_chroma_ids` | SQL stores the chunk's actual Chroma ID |
-| BUG-06 | `test_failed_ingestion_removes_all_created_artifacts[stage]` | New failed uploads leave no orphan artifacts |
-| BUG-06D | `test_cleanup_failure_preserves_consistent_document_state` | A cleanup failure does not leave contradictory stores |
+| BUG-01 | `test_document_specific_search_excludes_other_documents` | Passing: owner and requested UUID both constrain search |
+| BUG-02 | `test_numeric_document_id_is_rejected_at_uuid_contract` | Passing: canonical UUIDv4 boundary rejects numeric selection; UI sends UUID |
+| BUG-03 | `test_empty_retrieval_returns_a_response_without_crashing` | Passing: explicit response, empty sources, no prompt/LLM call |
+| BUG-04 | `test_missing_chunk_lookup_returns_empty_results`, `test_missing_chunk_api_returns_404` | Passing: empty lookup is safe and API returns 404 |
+| BUG-05 | `test_sql_chunk_ids_match_chroma_ids` | Strict xfail: SQL still does not store the actual Chroma ID |
+| BUG-06 | `test_failed_ingestion_removes_all_created_artifacts[stage]` | Five strict xfails: failed uploads still leave artifacts |
+| BUG-06D | `test_cleanup_failure_preserves_consistent_document_state` | Strict xfail: cleanup failure can leave contradictory stores |
 
-The empty-response wording and recovery design are Phase 2 choices. Strict UUID
-validation is a proposed contract, not an existing one. Existing characterization
-tests intentionally record current permissive behavior and must be revised along
-with approved repairs. Ranking improvements require a separate measured evaluation.
+The suite now reports 55 passing cases and seven strict expected failures. Ranking,
+chunk-ID consistency, and ingestion/deletion recovery remain separate work. Any
+ranking improvement still requires a representative measured evaluation.

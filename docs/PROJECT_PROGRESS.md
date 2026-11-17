@@ -19,10 +19,9 @@ checklist. This file tracks implementation phases and verified deliverables.
 - [x] Repair only Dashboard's initial request effect; verify lint and build.
 - [x] Preserve the RAG algorithm, business-logic defects and existing upload.py edit.
 
-The measured suite currently contains 58 cases: 46 passing and 12 strict expected
-failures. See [BASELINE_REPORT.md](BASELINE_REPORT.md) for authoritative execution
-results, coverage, measured values and limitations. Expected failures mean the
-business defects remain; they do not mean Phase 2 has been implemented.
+The Phase 1 suite contained 58 cases: 46 passing and 12 strict expected failures.
+See [BASELINE_REPORT.md](BASELINE_REPORT.md) for the preserved Phase 1 snapshot and
+the current Phase 2A comparison.
 
 ## Files delivered
 
@@ -69,16 +68,55 @@ the existing backend virtual environment. `backend/requirements.txt` is unchange
 The pre-existing `backend/app/api/upload.py` trailing-whitespace worktree change
 is preserved. No backend application-source file was edited in Phase 1.
 
-## Phase 2: recommendations, awaiting approval
+## Phase 2A: document-specific retrieval and chat correctness
 
-- [ ] Fix UI selection and API UUID validation together; apply owner plus UUID filters.
-- [ ] Handle empty retrieval and missing chunks explicitly, including HTTP contracts.
+- [x] Send `document_uuid` from the chat selector instead of the SQL integer ID.
+- [x] Validate selected IDs as canonical UUIDv4 values.
+- [x] Verify the selected document exists and belongs to the authenticated user.
+- [x] Apply both user ID and document UUID in document-scoped Chroma queries.
+- [x] Preserve user-only filtering for global-scope queries.
+- [x] Build the grounded prompt once when context exists.
+- [x] Return the existing response contract without calling Gemini when retrieval is empty.
+- [x] Return HTTP 404 for missing chunks while preserving existing ownership validation.
+- [x] Convert only BUG-01 through BUG-04 strict xfails into normal regressions.
+- [x] Regenerate the synthetic baseline and run backend, frontend lint, and frontend build checks.
+
+Phase 2A modified these application files:
+
+- `backend/app/models/chat.py`
+- `backend/app/api/chat.py`
+- `backend/app/rag/vectordb.py`
+- `backend/app/services/chat_service.py`
+- `frontend/exam_intelligence/src/pages/Chat.jsx`
+
+It also updated:
+
+- `backend/tests/regression/test_known_bugs.py`
+- `backend/tests/integration/test_api.py`
+- `backend/tests/evaluation/test_baseline.py`
+- `docs/PROJECT_PROGRESS.md`
+- `docs/BASELINE_REPORT.md`
+- `docs/HLD.md`
+- `docs/LLD.md`
+- `docs/baseline_results.json`
+
+Final Phase 2A verification: **55 passed, 7 strict expected failures, 0 failed,
+0 errors, and 1 warning**. Displayed coverage remains **82%**. Frontend lint and
+production build pass. Five former xfails now pass normally; three new guards
+cover global-scope retrieval, selected-document ownership, and the HTTP no-context path.
+
+Synthetic document isolation changed from 2 requested-document matches among 4
+returned chunks (0.50 scope precision) to 2 among 2 (1.00). The other-user fraction
+remained 0.00. Prompt construction changed from five calls to one for the five-
+context fixture. These values are controlled fixture measurements, not production
+accuracy.
+
+## Remaining work: awaiting approval
+
 - [ ] Persist actual Chroma chunk IDs in SQL.
 - [ ] Design rollback/compensation for failed uploads and recoverable deletion; avoid per-chunk partial commits.
-- [ ] Remove the fixed bugs' strict xfails and remeasure characterization baselines.
 - [ ] Agree on a representative evaluation corpus and real-model measurement protocol.
 - [ ] Consider ranking/chunking/prompt changes only after obtaining that quality baseline.
 
-No Phase 2 code, schema migration, ranking change, new user-facing functionality,
-production operation or deployment is authorized by Phase 1. Work stops here
-pending approval for the next phase.
+No Phase 2B/2C code, schema migration, ranking change, new user-facing functionality,
+production operation or deployment is included. Work stops here pending review.

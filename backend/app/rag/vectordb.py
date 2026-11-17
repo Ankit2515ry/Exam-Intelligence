@@ -190,62 +190,22 @@ def search_chunks(
         query
     )
 
-    # Metadata filtering support
-    # if document_id:
+    where = {
+        "user_id": int(user_id)
+    }
 
-    #     results = collection.query(
+    if document_id is not None:
+        where = {
+            "$and": [
+                {"user_id": int(user_id)},
+                {"document_id": str(document_id)}
+            ]
+        }
 
-    #         query_embeddings=[
-    #             query_embedding
-    #         ],
-
-    #         n_results=top_k,
-
-    #        where={
-    #             "$and": [
-    #                 {"user_id": user_id},
-    #                 {"document_id": document_id}
-    #             ]
-    #         }
-    #     )
-
-    # else:
-
-    #     print("\n====================")
-    #     print("SEARCH USER ID:", user_id)
-    #     print("TYPE:", type(user_id))
-    #     print("DOCUMENT ID:", document_id)
-    #     print("====================\n")
-
-    #     all_data = collection.get()
-
-    #     print("\nALL STORED METADATA:")
-    #     print(all_data["metadatas"][:10])
-
-
-    #     results = collection.query(
-
-    #         query_embeddings=[
-    #             query_embedding
-    #         ],
-
-    #         n_results=top_k,
-
-    #         where={
-    #             "user_id": user_id
-    #         }
-    #     )
-
-    #     print("\nQUERY RESULTS:")
-    #     print(results)
-    # print("USER ID RECEIVED:", user_id)
-    # print("TYPE:", type(user_id))
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
-        where={
-            "user_id": int(user_id)
-        }
+        where=where
     )
 
     # print("\nQUERY RESULTS:")
@@ -293,8 +253,6 @@ def get_chunk_by_id(
         ids=[chunk_id]
     )
     # print(results)
-
-    metadata = results["metadatas"][0]
 
     return results
 
