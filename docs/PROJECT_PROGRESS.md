@@ -141,12 +141,29 @@ and 1 warning**. Displayed coverage is **83%**. Frontend lint and production bui
 pass. These are isolated synthetic tests; no production files, PostgreSQL,
 persistent Chroma, Gemini, or real Tesseract process was accessed.
 
+## Phase 2C: cross-store consistency and recoverable deletion
+
+- [x] Use each generated chunk UUID as both the Chroma ID and SQL `Chunk.chroma_id`.
+- [x] Flush documents/chunks in one SQL transaction and commit once per upload.
+- [x] Roll SQL back and compensate Chroma/filesystem after ingestion failures.
+- [x] Convert all seven remaining strict xfails into passing regressions.
+- [x] Stage document directories by rename before deletion.
+- [x] Snapshot/restore vectors when deletion fails before SQL commit.
+- [x] Refuse deletion before mutation when unexpected directory contents exist.
+- [x] Report post-commit filesystem cleanup failure instead of claiming success.
+- [x] Add retry, restoration, orphan recovery, and read-only audit tests.
+- [x] Add `backend/scripts/check_chunk_consistency.py`; it never writes.
+
+Final verification: **81 passed, 0 xfailed, 0 failed, 0 errors, and 1 warning**.
+Displayed coverage is **82%**. Frontend lint and production build pass. No schema,
+RAG algorithm, frontend source, or production data was changed.
+
 ## Remaining work: awaiting approval
 
-- [ ] Persist actual Chroma chunk IDs in SQL.
-- [ ] Design rollback/compensation for failed uploads and recoverable deletion; avoid per-chunk partial commits.
+- [ ] Audit legacy IDs in read-only mode and review results before any repair.
+- [ ] If approved, back up all stores and design an idempotent reconciliation command with rollback.
 - [ ] Agree on a representative evaluation corpus and real-model measurement protocol.
 - [ ] Consider ranking/chunking/prompt changes only after obtaining that quality baseline.
 
-No Phase 2C code, schema migration, ranking change, new user-facing functionality,
-production operation or deployment is included. Work stops here pending review.
+No Phase 3 work, schema migration, legacy repair, ranking change, new user-facing
+functionality, production operation, or deployment is included. Work stops here.

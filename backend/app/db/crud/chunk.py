@@ -10,7 +10,8 @@ def create_chunk(
     content: str,
     chroma_id: str,
     page_number: int,
-    chunk_metadata: dict
+    chunk_metadata: dict,
+    commit: bool = True
 ):
 
     chunk = Chunk(
@@ -24,21 +25,27 @@ def create_chunk(
 
     db.add(chunk)
 
-    db.commit()
-
-    db.refresh(chunk)
+    if commit:
+        db.commit()
+        db.refresh(chunk)
+    else:
+        db.flush()
 
     return chunk
 
 
 def create_chunks_bulk(
     db: Session,
-    chunks: list
+    chunks: list,
+    commit: bool = True
 ):
 
     db.add_all(chunks)
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
 
 
 def get_document_chunks(

@@ -40,3 +40,27 @@ def test_password_hash_and_token_validation():
     assert verify_token("invalid") is None
     expired = jwt.encode({"sub": "student@example.com", "exp": 0}, jwt_handler.SECRET_KEY, algorithm=jwt_handler.ALGORITHM)
     assert verify_token(expired) is None
+
+
+def test_chunk_consistency_audit_is_read_only(auth_client, db, isolated_runtime, pdf_bytes):
+    from app.db.models.chunk import Chunk
+    from scripts.check_chunk_consistency import collect_consistency_report
+
+    response = auth_client.post(
+        "/api/upload",
+        files={"file": ("study.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert response.status_code == 200
+    before_sql = db.query(Chunk).count()
+    before_vectors = isolated_runtime.collection.count()
+
+    report = collect_consistency_report(db, isolated_runtime.collection)
+
+    assert report["mode"] == "read-only"
+    assert report["sql_chunk_count"] == before_sql
+    assert report["vector_chunk_count"] == before_vectors
+    assert report["matching_id_count"] == before_sql
+    assert report["sql_ids_missing_from_chroma"] == []
+    assert report["chroma_ids_missing_from_sql"] == []
+    assert db.query(Chunk).count() == before_sql
+    assert isolated_runtime.collection.count() == before_vectors

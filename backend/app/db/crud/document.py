@@ -10,7 +10,8 @@ def create_document(
     file_path: str,
     subject: str,
     uploaded_by: int,
-    document_uuid: str
+    document_uuid: str,
+    commit: bool = True
 ):
 
     document = Document(
@@ -30,9 +31,11 @@ def create_document(
 
     db.add(document)
 
-    db.commit()
-
-    db.refresh(document)
+    if commit:
+        db.commit()
+        db.refresh(document)
+    else:
+        db.flush()
 
     return document
 
@@ -85,9 +88,13 @@ def get_document_by_uuid(
 
 def delete_document_record(
     db: Session,
-    document: Document
+    document: Document,
+    commit: bool = True
 ):
 
     db.delete(document)
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()

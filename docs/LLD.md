@@ -1,6 +1,6 @@
 # Exam Intelligence: current low-level design
 
-Status: Phase 2B, 2026-11-17. Current behavior is authoritative here; desirable
+Status: Phase 2C, 2026-11-18. Current behavior is authoritative here; desirable
 changes are listed separately at the end. Paths below are relative to the repo.
 
 ## Assembly and module responsibilities
@@ -57,7 +57,7 @@ Protected routes require `Authorization: Bearer <JWT>`.
 | GET `/api/view/{document_uuid}` | UUID path parameter | PDF bytes; 404 missing record/file, 403 non-owner |
 | GET `/api/chunks/{document_uuid}` | UUID path parameter | Raw Chroma get result with parallel IDs/documents/metadatas arrays; 404 missing record, 403 non-owner |
 | GET `/api/chunk/{chunk_id}` | Chunk ID | `{chunk_id, text, metadata}`; 403 wrong owner; 404 missing chunk |
-| DELETE `/api/delete/{document_uuid}` | UUID path parameter | `{message, document_uuid}`; 404 missing, 403 non-owner, unhandled failures may leave partial state |
+| DELETE `/api/delete/{document_uuid}` | UUID path parameter | Existing `{message, document_uuid}`; 404 missing, 403 non-owner, 500 incomplete cleanup/recovery required |
 | POST `/api/chat` | JSON described below | `ChatResponse`; 401 no/invalid authentication, 422 missing required question, unhandled pipeline exceptions become 500 |
 
 The authentication prefix is doubled because both its APIRouter and
@@ -127,11 +127,10 @@ There are three different ID concepts:
    Chroma metadata's `document_id`.
 3. Chunk UUID: Chroma primary ID and metadata's `chunk_id`.
 
-The chat dropdown now uses `doc.document_uuid`, matching the identifier stored in
-Chroma metadata and accepted by the chat request. In ingestion, SQL `chroma_id` is
-still assigned a *new* UUID rather than the chunk UUID
-already stored in Chroma. The consistency defect is engine-independent; Phase 1
-reproduces the real CRUD path with SQLite, not a live PostgreSQL server.
+The chat dropdown uses `doc.document_uuid`, matching Chroma metadata and the chat
+request. The chunker generates one chunk UUID. Chroma uses it as the primary ID
+and metadata `chunk_id`; SQL stores the identical value in `Chunk.chroma_id`.
+Page number, chunk index, document UUID, and owner metadata are unchanged.
 
 ## Upload algorithm and commit boundaries
 
@@ -145,14 +144,15 @@ sequenceDiagram
     UI->>API: multipart PDF + bearer token
     API->>API: validate display name and MIME; generate UUID path
     API->>API: stream with byte limit; validate signature/pages/encryption
-    API->>SQL: create document and COMMIT
+    API->>SQL: add document and FLUSH
     API->>RAG: path, SQL id, UUID, user id
     RAG->>RAG: parse pages, clean, chunk
     RAG->>CV: generate embeddings, add all chunks
     loop Each chunk
-        RAG->>SQL: create chunk and COMMIT
+        RAG->>SQL: add chunk with canonical Chroma UUID and FLUSH
     end
     RAG-->>API: retained pages and chunk count
+    API->>SQL: COMMIT document + all chunks once
     API-->>UI: HTTP 200 + document summary
 ```
 
@@ -166,11 +166,13 @@ server-controlled `<UPLOAD_DIR>/<UUID>/document.pdf` path.
 Before SQL creation, the route verifies `%PDF-`, opens the file with PyMuPDF,
 rejects password-protected and zero-page documents, and loads every page. Any
 pre-database error removes the staged file/directory and closes the upload stream.
-Ingestion runs synchronously inside the async upload route. Later failures are logged
-and re-raised without deleting the file, rolling back earlier commits, or removing
-already accepted vectors. The test `vector_write` fault deliberately models an
-accepted write followed by a failed acknowledgement; it does not simulate a real
-Chroma server outage.
+Ingestion runs synchronously inside the async upload route. The document and all
+chunks share one SQL transaction; CRUD helpers flush without committing on this
+path. Parse, embedding, vector, SQL-write, or final-commit failure causes SQL
+rollback plus best-effort deletion of document vectors and the staged PDF/folder.
+Cleanup is idempotent when resources are absent. The stores have no shared atomic
+transaction, so compensation failure is logged and may require operator recovery.
+The `vector_write` test models an accepted write followed by failed acknowledgement.
 
 Parsing sorts PDF blocks by `(y, x)`. Pages with fewer than 20 extracted characters
 invoke OCR. Empty cleaned pages are discarded. `TESSERACT_CMD` selects an explicit
@@ -237,11 +239,14 @@ file. Single-chunk lookup now returns Chroma's empty result unchanged, allowing 
 route to return 404 before reading metadata. An existing chunk still checks the
 stored user ID before returning text, preserving the 403 ownership behavior.
 
-Deletion queries vector IDs and deletes them, removes the file if present, uses
-`os.rmdir` for the directory, then deletes/commits the SQL record. A nonempty
-directory can fail after vectors and file are gone, leaving the SQL row. There
-is no retry, shared transaction, compensation, processing-status field on the
-active SQL document table, or reconciliation job.
+Deletion rejects non-owners before mutation and verifies that the resolved folder
+is under `UPLOAD_DIR`. Unexpected files cause HTTP 500 with all three stores left
+unchanged. Otherwise it snapshots document vectors, renames the folder to
+`.<document UUID>.deleting`, deletes vectors, and commits SQL deletion. Failure
+before that commit rolls SQL back, restores missing vectors from the snapshot, and
+renames the folder back. After commit it removes the staged file/folder. Failure
+there returns HTTP 500 and leaves only the staging orphan; retrying the original
+UUID safely returns 404 because logical deletion completed.
 
 | Failure | Current behavior |
 |---|---|
@@ -252,7 +257,9 @@ active SQL document table, or reconciliation job.
 | Declared non-PDF, unsafe filename, empty/spoofed/corrupt/encrypted PDF | 400; pre-database staged artifact removed |
 | PDF exceeds configured limit | 413; pre-database staged artifact removed |
 | Missing Tesseract when OCR is required | Clear parser error naming page, `PATH`, and `TESSERACT_CMD`; text PDFs are unaffected |
-| OCR / embedding / vector / SQL ingestion error after document creation | Logs and propagates; usually 500 with partial artifacts |
+| OCR / embedding / vector / SQL ingestion error | 500; SQL rollback plus document-scoped vector/filesystem compensation |
+| Delete preflight or pre-commit failure | 500; existing SQL/file/vector state retained or restored |
+| Delete cleanup failure after SQL commit | 500; SQL/vector deletion remains, `.deleting` folder requires recovery |
 | Empty retrieval | 200 with original question, clear no-context answer and `sources: []`; no prompt or Gemini call |
 | Missing chunk | 404 `Chunk not found` |
 | Gemini error | Logs, returns generic answer text within 200 chat response |
@@ -274,7 +281,7 @@ effect, with state updated in its promise callback and an unmount cleanup flag.
 The existing helper still refreshes after upload/delete. The cause was recorded in
 [BASELINE_REPORT.md](BASELINE_REPORT.md) before this limited edit.
 
-## Regression mapping after Phase 2A
+## Regression mapping after Phase 2C
 
 All cases below live in `backend/tests/regression/test_known_bugs.py`. Phase 2A
 converted only the repaired cases to normal tests.
@@ -285,10 +292,28 @@ converted only the repaired cases to normal tests.
 | BUG-02 | `test_numeric_document_id_is_rejected_at_uuid_contract` | Passing: canonical UUIDv4 boundary rejects numeric selection; UI sends UUID |
 | BUG-03 | `test_empty_retrieval_returns_a_response_without_crashing` | Passing: explicit response, empty sources, no prompt/LLM call |
 | BUG-04 | `test_missing_chunk_lookup_returns_empty_results`, `test_missing_chunk_api_returns_404` | Passing: empty lookup is safe and API returns 404 |
-| BUG-05 | `test_sql_chunk_ids_match_chroma_ids` | Strict xfail: SQL still does not store the actual Chroma ID |
-| BUG-06 | `test_failed_ingestion_removes_all_created_artifacts[stage]` | Five strict xfails: failed uploads still leave artifacts |
-| BUG-06D | `test_cleanup_failure_preserves_consistent_document_state` | Strict xfail: cleanup failure can leave contradictory stores |
+| BUG-05 | `test_sql_chunk_ids_match_chroma_ids` | Passing: SQL and Chroma ID sets correspond exactly |
+| BUG-06 | `test_failed_ingestion_removes_all_created_artifacts[stage]` | Five passing cases: no SQL, vector, or PDF artifacts remain |
+| BUG-06D | `test_cleanup_failure_preserves_consistent_document_state` | Passing: preflight obstacle leaves all stores unchanged |
 
-The Phase 2B suite reports 70 passing cases and seven strict expected failures. Ranking,
-chunk-ID consistency, and ingestion/deletion recovery remain separate work. Any
-ranking improvement still requires a representative measured evaluation.
+The Phase 2C suite reports 81 passing cases and no xfails. Additional tests cover
+vector-delete restoration, safe delete retry, post-commit staging recovery, and
+the read-only legacy audit. Ranking still requires representative evaluation.
+
+## Legacy consistency audit and recovery
+
+Run `python -m scripts.check_chunk_consistency` from `backend/` only against the
+explicitly selected environment. It reports SQL/vector counts and IDs present in
+only one store. It has no write or repair mode. Existing document rows, PDFs, and
+legacy mismatched IDs remain readable; only direct SQL-to-Chroma ID correspondence
+is unreliable until reconciled.
+
+Before any future repair, stop writers and take coordinated PostgreSQL, Chroma,
+and upload-directory backups. Review a dry-run mapping by document UUID and chunk
+metadata, approve it explicitly, then use an idempotent separately reviewed tool.
+Rollback means restoring all three coordinated backups; Phase 2C performs no repair.
+
+For an orphan `.<UUID>.deleting` folder, first confirm the SQL document is absent
+and Chroma has no vectors for that UUID, then remove only that exact staging folder.
+If SQL still exists after a pre-commit compensation failure, restore/rename the
+folder if needed, run the audit, correct the failing dependency, and retry deletion.

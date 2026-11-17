@@ -102,7 +102,7 @@ def test_generated_pdf_ingestion_baseline(auth_client, db, isolated_runtime, pdf
         "scope": "Generated one-page text PDF, real parser/splitter/CRUD/Chroma, mocked embedding model",
     })
     assert len(rows) == len(vector_ids) > 0
-    assert matches == 0
+    assert matches == len(rows)
 
 
 @pytest.mark.parametrize("stage", INGESTION_STAGES)
@@ -112,9 +112,4 @@ def test_ingestion_failure_artifact_baseline(stage, auth_client, db, isolated_ru
     artifacts = ingestion_artifacts(db, isolated_runtime)
     record_baseline(f"ingestion_failure_{stage}", {"http_status": response.status_code, **artifacts})
     assert response.status_code == 500
-    assert artifacts["documents"] == artifacts["pdf_files"] == 1
-    assert artifacts["sql_chunks"] == (1 if stage == "sql_second" else 0)
-    if stage in ("parse", "embedding"):
-        assert artifacts["vector_chunks"] == 0
-    else:
-        assert artifacts["vector_chunks"] > 0
+    assert not any(artifacts.values())

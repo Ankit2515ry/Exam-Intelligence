@@ -16,10 +16,10 @@
   },
   "exit_status": 0,
   "test_outcomes": {
-    "passed": 70,
+    "passed": 81,
     "failed": 0,
     "error": 0,
-    "xfailed": 7,
+    "xfailed": 0,
     "xpassed": 0,
     "skipped": 0
   },
@@ -59,44 +59,44 @@
       "chunk_characters_min": 159,
       "chunk_characters_max": 237,
       "chunk_characters_mean": 210.33333333333334,
-      "sql_chroma_id_matches": 0,
-      "sql_chroma_id_match_fraction": 0.0,
+      "sql_chroma_id_matches": 3,
+      "sql_chroma_id_match_fraction": 1.0,
       "scope": "Generated one-page text PDF, real parser/splitter/CRUD/Chroma, mocked embedding model"
     },
     "ingestion_failure_parse": {
       "http_status": 500,
-      "documents": 1,
+      "documents": 0,
       "sql_chunks": 0,
       "vector_chunks": 0,
-      "pdf_files": 1
+      "pdf_files": 0
     },
     "ingestion_failure_embedding": {
       "http_status": 500,
-      "documents": 1,
+      "documents": 0,
       "sql_chunks": 0,
       "vector_chunks": 0,
-      "pdf_files": 1
+      "pdf_files": 0
     },
     "ingestion_failure_vector_write": {
       "http_status": 500,
-      "documents": 1,
+      "documents": 0,
       "sql_chunks": 0,
-      "vector_chunks": 4,
-      "pdf_files": 1
+      "vector_chunks": 0,
+      "pdf_files": 0
     },
     "ingestion_failure_sql_first": {
       "http_status": 500,
-      "documents": 1,
+      "documents": 0,
       "sql_chunks": 0,
-      "vector_chunks": 4,
-      "pdf_files": 1
+      "vector_chunks": 0,
+      "pdf_files": 0
     },
     "ingestion_failure_sql_second": {
       "http_status": 500,
-      "documents": 1,
-      "sql_chunks": 1,
-      "vector_chunks": 4,
-      "pdf_files": 1
+      "documents": 0,
+      "sql_chunks": 0,
+      "vector_chunks": 0,
+      "pdf_files": 0
     }
   }
 }

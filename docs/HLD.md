@@ -1,6 +1,6 @@
 # Exam Intelligence: current high-level design
 
-Status: Phase 2B, 2026-11-17. This describes the implementation and deployment
+Status: Phase 2C, 2026-11-18. This describes the implementation and deployment
 configuration in this checkout. Proposed work is labeled separately. See
 [LLD.md](LLD.md) for contracts and [BASELINE_REPORT.md](BASELINE_REPORT.md) for evidence.
 
@@ -61,10 +61,12 @@ Uploading a PDF first streams it through a size-limited validation gate. The gat
 uses the declared PDF MIME type, a PDF signature, and PyMuPDF parsing; it rejects
 empty, malformed, encrypted, unsupported, and oversized input. The client name is
 safe display metadata only. The server writes new content as
-`<UPLOAD_DIR>/<document UUID>/document.pdf`, then commits a document record,
-parses pages, chunks text, batches embeddings into Chroma, and commits SQL
-chunk records individually. These stores do not share a transaction. A failure
-can leave a document record, file, vectors, and some chunks behind.
+`<UPLOAD_DIR>/<document UUID>/document.pdf`, then flushes a document record inside
+one SQL transaction, parses pages, chunks text, and batches embeddings into Chroma.
+SQL chunks use the same canonical UUIDs as Chroma and are flushed before one final
+SQL commit. On failure SQL rolls back and the route attempts document-scoped
+Chroma and filesystem compensation. The stores do not share an atomic transaction;
+compensation can itself fail and is logged for recovery.
 
 A question is embedded and searched against Chroma with a user-ID filter. When a
 document is selected, the API validates its canonical UUID and SQL ownership, and
@@ -75,9 +77,11 @@ response without calling Gemini. The response carries the answer plus source
 metadata and excerpts. No previous chat turns are included in the request or prompt.
 
 The dashboard lists the current user's documents. PDF viewing and deletion check
-SQL ownership; chunk lookup checks stored ownership metadata. Deletion removes
-vectors, then the PDF and its directory, then the SQL record and related SQL
-chunks. Failures can leave partial deletion.
+SQL ownership; chunk lookup checks stored ownership metadata. Deletion validates
+the directory before mutation, snapshots vectors, and stages the directory by
+rename. Pre-commit failure rolls SQL back, restores missing vectors idempotently,
+and renames the directory back. After SQL commit, the staged directory is removed.
+A final cleanup failure returns 500 and leaves an identifiable staging orphan.
 
 ## Storage boundaries
 
@@ -139,10 +143,10 @@ threshold. `TESSERACT_CMD` may name the executable; when unset, pytesseract reso
 `tesseract` through `PATH`. Missing Tesseract raises an error identifying the page
 and both configuration choices. Text PDFs do not require the executable.
 
-## Proposed improvements after Phase 2B: not implemented
+## Proposed improvements after Phase 2C: not implemented
 
-Next repair chunk-ID consistency and recoverable ingestion/deletion. Run the strict
-regressions after each repair and convert only the relevant expected failures to
-normal tests. Then agree on an evaluation corpus and measure real model behavior
-before changing candidate selection, ranking, chunking, or prompting. No
-infrastructure expansion is proposed as a prerequisite for those fixes.
+Run the read-only legacy consistency audit and review its output before designing
+any approved repair. A repair requires coordinated SQL, Chroma, and file backups,
+an idempotent dry run, and a tested rollback procedure. Then agree on an evaluation
+corpus before changing candidate selection, ranking, chunking, prompting, or models.
+Phase 3 has not started.

@@ -32,7 +32,6 @@ while low-level logic remains inside:
 - rag/vectordb.py
 """
 
-import uuid
 import logging
 from typing import Dict
 
@@ -157,14 +156,16 @@ def ingest_document(
 
             content=chunk["text"],
 
-            chroma_id=str(uuid.uuid4()),
+            chroma_id=chunk["chunk_id"],
 
             page_number=metadata.get(
                 "page",
                 1
             ),
 
-            chunk_metadata=metadata
+            chunk_metadata=metadata,
+
+            commit=False
         )
     # =====================================================
     # RETURN INGESTION RESULT

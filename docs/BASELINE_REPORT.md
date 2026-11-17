@@ -1,10 +1,44 @@
 # Phase 1 baseline report
 
 Review date: 2026-11-17. This report preserves the Phase 1 baseline and records the
-Phase 2A correctness comparison and the Phase 2B upload-security verification.
-Machine-readable measurements represent the Phase 2B checkout in
+Phase 2A correctness, Phase 2B upload security, and Phase 2C persistence evidence.
+Machine-readable measurements represent the Phase 2C checkout in
 [baseline_results.json](baseline_results.json); the test
 design and limits remain in [TESTING_STRATEGY.md](TESTING_STRATEGY.md).
+
+## Phase 2C results: cross-store consistency and deletion recovery
+
+The authoritative isolated run completed with **81 passed, 0 xfailed, 0 failed,
+0 errors, and 1 warning in 11.47 seconds**. A full non-coverage run completed with
+the same outcomes in 9.04 seconds. All seven Phase 2B strict expected failures are
+now ordinary passing regressions. Three additional deletion recovery tests and one
+read-only audit test were added.
+
+Coverage displays **82%**: 998 statements, 818 covered lines, 180 missing lines,
+174 branches, and 141 covered branches. Exact combined coverage is 81.83%; exact
+statement coverage is 81.96% and branch coverage is 81.03%. The only warning is
+the existing Starlette TestClient deprecation notice.
+
+The generated synthetic PDF produced three SQL and three Chroma chunks with all
+three canonical IDs matching (1.00 ID-match fraction; previously 0.00). Each of
+the five injected parse/embedding/vector/SQL failure stages returned HTTP 500 and
+left zero document rows, SQL chunks, Chroma vectors, and PDF files. These are
+controlled consistency measurements, not production accuracy or availability.
+
+Deletion tests establish that unexpected directory contents are rejected before
+mutation, a vector-deletion exception restores the original file/SQL/vector state,
+a successful second delete is a harmless 404, and a synthetic post-commit locked
+file returns 500 while leaving a named `.deleting` orphan for manual recovery.
+They do not prove that compensation can survive every simultaneous infrastructure
+failure; PostgreSQL, Chroma, and the filesystem are not atomically transactional.
+
+Frontend lint exited 0. The production build exited 0, transformed 1,807 modules,
+and completed in 861 ms. No frontend source changed.
+
+Legacy data was not modified. `python -m scripts.check_chunk_consistency`, run
+from `backend/`, is read-only and reports cross-store ID differences. Any repair
+requires explicit approval plus coordinated SQL/Chroma/upload backups and a tested
+rollback; no migration or automated reindexing is included.
 
 ## Phase 2B results: upload validation and OCR portability
 
@@ -326,15 +360,14 @@ updates state from the promise completion, and uses a cleanup flag to ignore sta
 responses. The existing `loadDocs` helper still refreshes after upload and deletion.
 No route, API contract, user-facing feature, or RAG behavior was changed.
 
-## Recommendations after Phase 2B
+## Recommendations after Phase 2C
 
-1. Store each actual Chroma chunk ID in its SQL row and reconcile existing data if
-   any production records depend on the incorrect references.
-2. Design ingestion/deletion compensation and transaction boundaries before coding:
-   avoid per-chunk commits, record processing state if needed, and make retries or
-   reconciliation safe across SQL, Chroma and filesystem stores.
+1. Run the read-only legacy audit in a backed-up maintenance context and review
+   mismatches; do not repair or reindex without separate approval.
+2. If repair is approved, implement an idempotent dry-run-first reconciliation
+   tool and test coordinated backup restoration before executing writes.
 3. Rerun the complete suite and regenerate baseline JSON after every approved fix.
 4. Agree on a representative, permitted evaluation corpus and scoring protocol
    before changing chunking, retrieval, ranking, prompting, or model selection.
 
-Phase 2B stops here. Phase 2C has not been implemented.
+Phase 2C stops here. Phase 3 has not been implemented.

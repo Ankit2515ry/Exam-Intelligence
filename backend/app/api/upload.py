@@ -48,7 +48,9 @@ from app.services.ingestion_service import (
 from app.rag.vectordb import (
     get_chunk_by_id,
     get_document_chunks,
-    delete_document_chunks
+    delete_document_chunks,
+    snapshot_document_chunks,
+    restore_document_chunks
 )
 
 from app.db.session import get_db
@@ -231,6 +233,30 @@ def _cleanup_staged_upload(
         document_folder.rmdir()
 
 
+def _compensate_failed_ingestion(
+    db: Session,
+    document_uuid: str | None,
+    document_folder: Path | None,
+    file_path: Path | None,
+) -> None:
+    """Best-effort compensation across stores; preserve the original exception."""
+    try:
+        db.rollback()
+    except Exception:
+        logger.exception("SQL rollback failed for document_uuid=%s", document_uuid)
+
+    if document_uuid is not None:
+        try:
+            delete_document_chunks(document_uuid)
+        except Exception:
+            logger.exception("Vector compensation failed for document_uuid=%s", document_uuid)
+
+    try:
+        _cleanup_staged_upload(document_folder, file_path)
+    except Exception:
+        logger.exception("Filesystem compensation failed for document_uuid=%s", document_uuid)
+
+
 # =========================================================
 # ROUTER
 # =========================================================
@@ -333,7 +359,9 @@ async def upload_pdf(
 
             uploaded_by=current_user.id,
 
-            document_uuid=document_uuid
+            document_uuid=document_uuid,
+
+            commit=False
         )
 
         # -----------------------------------------------------
@@ -346,23 +374,27 @@ async def upload_pdf(
             document_uuid=document.document_uuid,
             user_id=current_user.id,
         )
+        db.commit()
+        db.refresh(document)
     except HTTPException:
-        if document is None:
-            _cleanup_staged_upload(
-                document_folder=document_folder,
-                file_path=file_path
-            )
+        _compensate_failed_ingestion(
+            db=db,
+            document_uuid=document_uuid if "document_uuid" in locals() else None,
+            document_folder=document_folder,
+            file_path=file_path,
+        )
         logger.warning(
             "Rejected PDF upload for user_id=%s",
             current_user.id,
         )
         raise
     except Exception:
-        if document is None:
-            _cleanup_staged_upload(
-                document_folder=document_folder,
-                file_path=file_path
-            )
+        _compensate_failed_ingestion(
+            db=db,
+            document_uuid=document_uuid if "document_uuid" in locals() else None,
+            document_folder=document_folder,
+            file_path=file_path,
+        )
 
         logger.exception(
             "PDF upload or ingestion failed for document_uuid=%s user_id=%s",
@@ -662,46 +694,72 @@ def delete_document(
             detail="Access denied"
         )
 
-    # -----------------------------------------------------
-    # DELETE CHROMADB VECTORS
-    # -----------------------------------------------------
+    file_path = Path(document.file_path).resolve()
+    folder_path = file_path.parent
+    upload_root = Path(UPLOAD_DIR).resolve()
 
-    delete_document_chunks(
-        document_uuid
-    )
+    if not folder_path.is_relative_to(upload_root):
+        raise HTTPException(
+            status_code=500,
+            detail="Document cleanup path is outside the upload directory",
+        )
 
-    # -----------------------------------------------------
-    # DELETE PDF FILE
-    # -----------------------------------------------------
+    if folder_path.exists():
+        unexpected = [entry for entry in folder_path.iterdir() if entry.resolve() != file_path]
+        if unexpected:
+            raise HTTPException(
+                status_code=500,
+                detail="Document cleanup is incomplete; remove unexpected files and retry",
+            )
 
-    if os.path.exists(
-        document.file_path
-    ):
+    staged_folder = folder_path.with_name(f".{folder_path.name}.deleting")
+    if staged_folder.exists():
+        raise HTTPException(
+            status_code=500,
+            detail="A previous deletion staging directory requires recovery",
+        )
 
-        os.remove(document.file_path)
+    vector_snapshot = snapshot_document_chunks(document_uuid)
+    folder_staged = False
+    database_committed = False
 
-    # -----------------------------------------------------
-    # DELETE EMPTY FOLDER
-    # -----------------------------------------------------
+    try:
+        if folder_path.exists():
+            folder_path.rename(staged_folder)
+            folder_staged = True
 
-    folder_path = os.path.dirname(
-        document.file_path
-    )
+        delete_document_chunks(document_uuid)
+        delete_document_record(db=db, document=document, commit=False)
+        db.commit()
+        database_committed = True
 
-    if os.path.exists(folder_path):
+        if folder_staged:
+            staged_file = staged_folder / file_path.name
+            if staged_file.exists():
+                staged_file.unlink()
+            staged_folder.rmdir()
+    except Exception as exc:
+        if not database_committed:
+            db.rollback()
+            try:
+                restore_document_chunks(vector_snapshot)
+            except Exception:
+                logger.exception("Vector restoration failed for document_uuid=%s", document_uuid)
+            try:
+                if folder_staged and staged_folder.exists() and not folder_path.exists():
+                    staged_folder.rename(folder_path)
+            except Exception:
+                logger.exception("Filesystem restoration failed for document_uuid=%s", document_uuid)
 
-        os.rmdir(folder_path)
-
-    # -----------------------------------------------------
-    # DELETE DATABASE RECORD
-    # -----------------------------------------------------
-
-    delete_document_record(
-
-        db=db,
-
-        document=document
-    )
+        logger.exception(
+            "Document deletion incomplete document_uuid=%s database_committed=%s",
+            document_uuid,
+            database_committed,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Document deletion is incomplete; retry or follow the recovery procedure",
+        ) from exc
 
     return {
 

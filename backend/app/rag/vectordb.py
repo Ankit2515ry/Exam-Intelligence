@@ -283,3 +283,30 @@ def delete_document_chunks(
         collection.delete(
             ids=ids
         )
+
+
+def snapshot_document_chunks(document_id: str) -> Dict:
+    """Capture a document's vectors so a failed cross-store delete can restore them."""
+    return collection.get(
+        where={"document_id": str(document_id)},
+        include=["documents", "metadatas", "embeddings"],
+    )
+
+
+def restore_document_chunks(snapshot: Dict) -> None:
+    """Idempotently restore a previously captured document-vector snapshot."""
+    ids = snapshot.get("ids") or []
+    if not ids:
+        return
+
+    existing = set(collection.get(ids=ids).get("ids") or [])
+    missing_indexes = [index for index, chunk_id in enumerate(ids) if chunk_id not in existing]
+    if not missing_indexes:
+        return
+
+    collection.add(
+        ids=[ids[index] for index in missing_indexes],
+        embeddings=[snapshot["embeddings"][index] for index in missing_indexes],
+        documents=[snapshot["documents"][index] for index in missing_indexes],
+        metadatas=[snapshot["metadatas"][index] for index in missing_indexes],
+    )
