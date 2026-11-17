@@ -277,7 +277,7 @@ def get_documents(
 
     current_user: User = Depends(
         get_current_user
-    ),
+    ), 
 
     db: Session = Depends(get_db)
 ):

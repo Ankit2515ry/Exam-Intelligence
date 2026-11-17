@@ -1,5 +1,21 @@
 # Exam Intelligence 🧠
 
+Architecture and verification: [HLD](docs/HLD.md), [LLD](docs/LLD.md),
+[testing strategy](docs/TESTING_STRATEGY.md), [baseline report](docs/BASELINE_REPORT.md),
+and [development progress](docs/PROJECT_PROGRESS.md).
+
+For the isolated backend suite, from `backend/` with application dependencies installed:
+
+```powershell
+.\venv\Scripts\python.exe -m pip install -r requirements-test.txt
+.\venv\Scripts\python.exe -B -m pytest -q
+```
+
+Tests use temporary SQL storage, in-memory Chroma and mocked AI services. Known
+bugs are strict expected failures pending Phase 2. The actual frontend directory
+is `frontend/exam_intelligence`; the installed Vite requires Node
+`^20.19.0 || >=22.12.0`. See the linked strategy for coverage and baseline commands.
+
 Exam Intelligence is an advanced RAG (Retrieval-Augmented Generation) application designed to ingest context documents (PDFs) and allow users to converse with their documents through an AI grounded prompt shell. 
 
 The project uses a **FastAPI** backend coupled with a **ChromaDB** vector storage engine, and a modern **React (Vite)** frontend tracking layout components via Tailwind CSS.

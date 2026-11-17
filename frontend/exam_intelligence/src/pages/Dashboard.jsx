@@ -153,7 +153,21 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    loadDocs();
+    let active = true;
+
+    uploadService.getDocuments()
+      .then((data) => {
+        if (active) {
+          setDocuments(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading documents", err);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleFileUpload = async (e) => {

@@ -1,5 +1,9 @@
 # Exam Intelligence Project Learning Progress
 
+Current development-phase status is tracked in [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md).
+Phase 1 added isolated testing, baseline evidence and architecture documentation.
+The learning checklist below is retained; its unchecked boxes are not a Phase 1 delivery status.
+
 This file is the project walkthrough checklist. We will follow the application
 in runtime order, study one file at a time, and mark a file complete only after
 its purpose, inputs, outputs, and connections to other files are understood.

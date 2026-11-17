@@ -1,0 +1,7 @@
+[run]
+branch = True
+source = app
+
+[report]
+# Include unimported files in namespace-package directories such as db/schemas.
+include_namespace_packages = True

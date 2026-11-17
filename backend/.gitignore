@@ -112,6 +112,9 @@ dist/
 # Testing
 # =========================================================
 .pytest_cache/
+.coverage
+.coverage.*
+/tests/artifacts/
 coverage/
 
 

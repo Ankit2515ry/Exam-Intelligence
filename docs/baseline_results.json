@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "scope": "Synthetic offline fixtures; not production quality or performance",
+  "python": "3.11.9",
+  "packages": {
+    "pytest": "8.3.5",
+    "pytest-cov": "6.0.0",
+    "coverage": "7.17.3",
+    "fastapi": "0.136.3",
+    "httpx": "0.28.1",
+    "SQLAlchemy": "2.0.50",
+    "chromadb": "1.5.9",
+    "langchain-text-splitters": "1.1.2",
+    "rank-bm25": "0.2.2",
+    "PyMuPDF": "1.27.2.3"
+  },
+  "exit_status": 0,
+  "test_outcomes": {
+    "passed": 46,
+    "failed": 0,
+    "error": 0,
+    "xfailed": 12,
+    "xpassed": 0,
+    "skipped": 0
+  },
+  "warning_count": 1,
+  "measurements": {
+    "document_scope": {
+      "corpus_chunks": 5,
+      "owner_chunks": 4,
+      "requested_document_chunks": 2,
+      "requested_k": 5,
+      "returned_chunks": 4,
+      "requested_document_matches": 2,
+      "document_scope_precision": 0.5,
+      "other_document_fraction": 0.5,
+      "other_user_fraction": 0.0,
+      "scope": "Document membership only; no semantic relevance labels or real embeddings"
+    },
+    "pipeline_counts": {
+      "corpus_chunks": 12,
+      "owner_chunks": 10,
+      "prompt_build_calls": 5,
+      "requested_vector_k": 10,
+      "vector_candidates": 10,
+      "bm25_survivors": 5,
+      "hybrid_survivors": 5,
+      "cross_encoder_candidates": 5,
+      "context_chunks": 5,
+      "context_characters": 348,
+      "returned_sources": 5,
+      "llm_calls": 1
+    },
+    "generated_pdf": {
+      "pdf_bytes": 948,
+      "retained_text_pages": 1,
+      "sql_chunks": 3,
+      "vector_chunks": 3,
+      "chunk_characters_min": 159,
+      "chunk_characters_max": 237,
+      "chunk_characters_mean": 210.33333333333334,
+      "sql_chroma_id_matches": 0,
+      "sql_chroma_id_match_fraction": 0.0,
+      "scope": "Generated one-page text PDF, real parser/splitter/CRUD/Chroma, mocked embedding model"
+    },
+    "ingestion_failure_parse": {
+      "http_status": 500,
+      "documents": 1,
+      "sql_chunks": 0,
+      "vector_chunks": 0,
+      "pdf_files": 1
+    },
+    "ingestion_failure_embedding": {
+      "http_status": 500,
+      "documents": 1,
+      "sql_chunks": 0,
+      "vector_chunks": 0,
+      "pdf_files": 1
+    },
+    "ingestion_failure_vector_write": {
+      "http_status": 500,
+      "documents": 1,
+      "sql_chunks": 0,
+      "vector_chunks": 4,
+      "pdf_files": 1
+    },
+    "ingestion_failure_sql_first": {
+      "http_status": 500,
+      "documents": 1,
+      "sql_chunks": 0,
+      "vector_chunks": 4,
+      "pdf_files": 1
+    },
+    "ingestion_failure_sql_second": {
+      "http_status": 500,
+      "documents": 1,
+      "sql_chunks": 1,
+      "vector_chunks": 4,
+      "pdf_files": 1
+    }
+  }
+}
