@@ -1,6 +1,6 @@
 # Exam Intelligence: current low-level design
 
-Status: Phase 1, 2026-11-17. Current behavior is authoritative here; desirable
+Status: Phase 2B, 2026-11-17. Current behavior is authoritative here; desirable
 changes are listed separately at the end. Paths below are relative to the repo.
 
 ## Assembly and module responsibilities
@@ -52,7 +52,7 @@ Protected routes require `Authorization: Bearer <JWT>`.
 | GET `/health/ready` | None | `{status: "ready", checks: {database, vector_store}}`; 503 with `not_ready` and `unavailable` values |
 | POST `/auth/auth/signup` | JSON `{name, email, password}` | `{message}`; 400 duplicate email, 422 invalid email/short password |
 | POST `/auth/auth/login` | URL-encoded `username=<email>&password=...` | `{access_token, token_type: "bearer"}`; 401 invalid email/password |
-| POST `/api/upload` | Multipart `file` | `{message, document: {id, document_uuid, filename, uploaded_by, total_pages, total_chunks}}`; `uploaded_by` here is email; 400 declared non-PDF |
+| POST `/api/upload` | Multipart PDF `file` | Existing `{message, document: {id, document_uuid, filename, uploaded_by, total_pages, total_chunks}}`; 400 invalid/empty/malformed/encrypted/name, 413 oversized |
 | GET `/api/documents` | Bearer token | Array of SQL document objects belonging to user |
 | GET `/api/view/{document_uuid}` | UUID path parameter | PDF bytes; 404 missing record/file, 403 non-owner |
 | GET `/api/chunks/{document_uuid}` | UUID path parameter | Raw Chroma get result with parallel IDs/documents/metadatas arrays; 404 missing record, 403 non-owner |
@@ -143,7 +143,8 @@ sequenceDiagram
     participant RAG as Ingestion service
     participant CV as Chroma
     UI->>API: multipart PDF + bearer token
-    API->>API: MIME check, UUID, save original file
+    API->>API: validate display name and MIME; generate UUID path
+    API->>API: stream with byte limit; validate signature/pages/encryption
     API->>SQL: create document and COMMIT
     API->>RAG: path, SQL id, UUID, user id
     RAG->>RAG: parse pages, clean, chunk
@@ -155,17 +156,29 @@ sequenceDiagram
     API-->>UI: HTTP 200 + document summary
 ```
 
-The file's client-provided filename is directly joined to the UUID directory.
-There is no configured upload-size bound or content-signature validation here.
-Ingestion runs synchronously inside the async upload route. Failures are logged
+`MAX_PDF_UPLOAD_SIZE_BYTES` is read from the environment and defaults to
+26,214,400 bytes (25 MiB). The route reads at most the remaining allowance plus
+one byte, so enforcement occurs during streaming. The client filename must be a
+single relative printable name ending in `.pdf`, may be at most 255 characters,
+and is retained only in SQL/display metadata. New bytes are stored at the
+server-controlled `<UPLOAD_DIR>/<UUID>/document.pdf` path.
+
+Before SQL creation, the route verifies `%PDF-`, opens the file with PyMuPDF,
+rejects password-protected and zero-page documents, and loads every page. Any
+pre-database error removes the staged file/directory and closes the upload stream.
+Ingestion runs synchronously inside the async upload route. Later failures are logged
 and re-raised without deleting the file, rolling back earlier commits, or removing
 already accepted vectors. The test `vector_write` fault deliberately models an
 accepted write followed by a failed acknowledgement; it does not simulate a real
 Chroma server outage.
 
 Parsing sorts PDF blocks by `(y, x)`. Pages with fewer than 20 extracted characters
-invoke OCR. Empty cleaned pages are discarded. On Windows Tesseract's executable
-path is fixed to `C:\Program Files\Tesseract-OCR\tesseract.exe`.
+invoke OCR. Empty cleaned pages are discarded. `TESSERACT_CMD` selects an explicit
+executable; otherwise pytesseract runs `tesseract` through `PATH`. Text-rich pages
+never require OCR. When OCR is required and the executable is missing, the parser
+raises a clear error containing the one-based page and both configuration options.
+PyMuPDF documents, pixmaps, byte streams, and PIL images use bounded cleanup while
+the existing one-based page metadata remains unchanged.
 
 Cleaning collapses whitespace before splitting, removes `Page <digits>`, and
 collapses repeated dots. Chunking is page-local, uses 250-character size and
@@ -236,8 +249,10 @@ active SQL document table, or reconciliation job.
 | Invalid request body | Framework 422 |
 | Duplicate signup | 400 |
 | Invalid login | 401, distinguishes email/password errors |
-| Declared non-PDF | 400 before saving anything |
-| Invalid PDF / OCR / embedding / vector / SQL ingestion error | Logs and propagates; usually 500 with partial artifacts |
+| Declared non-PDF, unsafe filename, empty/spoofed/corrupt/encrypted PDF | 400; pre-database staged artifact removed |
+| PDF exceeds configured limit | 413; pre-database staged artifact removed |
+| Missing Tesseract when OCR is required | Clear parser error naming page, `PATH`, and `TESSERACT_CMD`; text PDFs are unaffected |
+| OCR / embedding / vector / SQL ingestion error after document creation | Logs and propagates; usually 500 with partial artifacts |
 | Empty retrieval | 200 with original question, clear no-context answer and `sources: []`; no prompt or Gemini call |
 | Missing chunk | 404 `Chunk not found` |
 | Gemini error | Logs, returns generic answer text within 200 chat response |
@@ -274,6 +289,6 @@ converted only the repaired cases to normal tests.
 | BUG-06 | `test_failed_ingestion_removes_all_created_artifacts[stage]` | Five strict xfails: failed uploads still leave artifacts |
 | BUG-06D | `test_cleanup_failure_preserves_consistent_document_state` | Strict xfail: cleanup failure can leave contradictory stores |
 
-The suite now reports 55 passing cases and seven strict expected failures. Ranking,
+The Phase 2B suite reports 70 passing cases and seven strict expected failures. Ranking,
 chunk-ID consistency, and ingestion/deletion recovery remain separate work. Any
 ranking improvement still requires a representative measured evaluation.

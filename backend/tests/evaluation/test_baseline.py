@@ -27,7 +27,7 @@ def test_document_scope_baseline(isolated_runtime, record_baseline):
         "scope": "Document membership only; no semantic relevance labels or real embeddings",
     }
     record_baseline("document_scope", report)
-    assert len(metadata) == 4 and matching == 2 and other_user == 0
+    assert len(metadata) == 2 and matching == 2 and other_user == 0
 
 
 def test_pipeline_candidate_and_generation_counts(isolated_runtime, monkeypatch, record_baseline):
@@ -79,7 +79,8 @@ def test_pipeline_candidate_and_generation_counts(isolated_runtime, monkeypatch,
     record_baseline("pipeline_counts", counts)
     assert counts["vector_candidates"] == 10
     assert counts["bm25_survivors"] == counts["hybrid_survivors"] == counts["cross_encoder_candidates"] == 5
-    assert counts["context_chunks"] == counts["returned_sources"] == counts["prompt_build_calls"] == 5
+    assert counts["context_chunks"] == counts["returned_sources"] == 5
+    assert counts["prompt_build_calls"] == 1
     assert counts["llm_calls"] == 1
 
 

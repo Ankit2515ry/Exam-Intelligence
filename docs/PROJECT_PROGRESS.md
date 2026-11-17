@@ -111,6 +111,36 @@ remained 0.00. Prompt construction changed from five calls to one for the five-
 context fixture. These values are controlled fixture measurements, not production
 accuracy.
 
+## Phase 2B: PDF upload security, validation, and OCR portability
+
+- [x] Enforce a configurable byte limit while streaming rather than buffering the upload.
+- [x] Validate the PDF signature and parse every page before creating a database record.
+- [x] Reject empty, malformed/corrupt, encrypted, MIME-mismatched, and oversized PDFs.
+- [x] Treat the client filename as display metadata only and reject path/absolute-name input.
+- [x] Store new PDFs at a server-generated `<UPLOAD_DIR>/<document UUID>/document.pdf` path.
+- [x] Remove staged files and directories when pre-database validation fails.
+- [x] Configure Tesseract with `TESSERACT_CMD`, otherwise resolve `tesseract` through `PATH`.
+- [x] Keep text PDFs independent of OCR and emit a clear OCR error only when OCR is required.
+- [x] Close PyMuPDF documents, pixmaps, byte streams, PIL images, and uploaded streams.
+- [x] Add isolated synthetic upload/OCR tests and rerun all Phase 2A regressions.
+
+Phase 2B application and test files:
+
+- `backend/app/config/settings.py`
+- `backend/app/api/upload.py`
+- `backend/app/rag/parser.py`
+- `backend/tests/conftest.py`
+- `backend/tests/integration/test_upload_security.py` (new)
+- `backend/tests/unit/test_rag.py`
+
+Documentation/evidence updated: `docs/HLD.md`, `docs/LLD.md`,
+`docs/BASELINE_REPORT.md`, this file, and `docs/baseline_results.json`.
+
+Final verification: **70 passed, 7 strict expected failures, 0 failed, 0 errors,
+and 1 warning**. Displayed coverage is **83%**. Frontend lint and production build
+pass. These are isolated synthetic tests; no production files, PostgreSQL,
+persistent Chroma, Gemini, or real Tesseract process was accessed.
+
 ## Remaining work: awaiting approval
 
 - [ ] Persist actual Chroma chunk IDs in SQL.
@@ -118,5 +148,5 @@ accuracy.
 - [ ] Agree on a representative evaluation corpus and real-model measurement protocol.
 - [ ] Consider ranking/chunking/prompt changes only after obtaining that quality baseline.
 
-No Phase 2B/2C code, schema migration, ranking change, new user-facing functionality,
+No Phase 2C code, schema migration, ranking change, new user-facing functionality,
 production operation or deployment is included. Work stops here pending review.

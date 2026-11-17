@@ -45,6 +45,8 @@ _start(patch.dict(os.environ, {
     "UPLOAD_DIR": str(ISOLATION_ROOT / "uploads"),
     "CHUNKS_DIR": str(ISOLATION_ROOT / "chunks"),
     "VECTOR_DB_DIR": str(ISOLATION_ROOT / "vectors"),
+    "MAX_PDF_UPLOAD_SIZE_BYTES": str(1024 * 1024),
+    "TESSERACT_CMD": "",
     "SECRET_KEY": "isolated-tests-only-not-a-production-secret",
     "ALGORITHM": "HS256",
     "ACCESS_TOKEN_EXPIRE_MINUTES": "15",
@@ -195,6 +197,11 @@ def isolated_runtime(tmp_path, monkeypatch):
     from app.api import upload
     monkeypatch.setattr(upload, "UPLOAD_DIR", settings.UPLOAD_DIR)
     monkeypatch.setattr(upload, "CHUNKS_DIR", settings.CHUNKS_DIR)
+    monkeypatch.setattr(
+        upload,
+        "MAX_PDF_UPLOAD_SIZE_BYTES",
+        settings.MAX_PDF_UPLOAD_SIZE_BYTES,
+    )
     from app.main import app
     app.dependency_overrides.clear()
     runtime = SimpleNamespace(engine=engine, session_factory=factory,

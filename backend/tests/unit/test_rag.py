@@ -77,13 +77,17 @@ def test_llm_response_and_failure_contract(monkeypatch, result, expected):
     assert llm_service.generate_answer("test prompt") == expected
 
 
-def test_parser_extracts_generated_pdf(pdf_bytes, tmp_path):
+def test_parser_extracts_generated_pdf_without_ocr(pdf_bytes, tmp_path, monkeypatch):
     from app.rag.parser import PDFParser
     path = tmp_path / "synthetic.pdf"
     path.write_bytes(pdf_bytes)
+    ocr = Mock(side_effect=AssertionError("Text PDF must not require OCR"))
+    monkeypatch.setattr(PDFParser, "perform_ocr_on_page", ocr)
     pages = PDFParser(str(path)).parse()
+    ocr.assert_not_called()
     assert len(pages) == 1
     assert pages[0]["page"] == 1
+    assert pages[0]["metadata"]["page_number"] == 1
     assert "normalization" in pages[0]["text"]
 
 
@@ -98,4 +102,41 @@ def test_parser_ocr_fallback_is_mocked(monkeypatch, tmp_path):
     monkeypatch.setattr(PDFParser, "perform_ocr_on_page", ocr)
     pages = PDFParser(str(path)).parse()
     ocr.assert_called_once()
+    assert pages[0]["page"] == 1
+    assert pages[0]["metadata"]["page_number"] == 1
     assert pages[0]["text"].startswith("Synthetic OCR")
+
+
+def test_missing_tesseract_has_clear_error_when_ocr_is_required(monkeypatch, tmp_path):
+    import fitz
+    from app.rag import parser
+
+    path = tmp_path / "scanned.pdf"
+    with fitz.open() as document:
+        document.new_page()
+        document.save(path)
+
+    missing = parser.pytesseract.TesseractNotFoundError()
+    monkeypatch.setattr(
+        parser.pytesseract,
+        "image_to_string",
+        Mock(side_effect=missing),
+    )
+
+    with pytest.raises(RuntimeError, match="OCR is required on page 1") as error:
+        parser.PDFParser(str(path)).parse()
+    assert "TESSERACT_CMD" in str(error.value)
+    assert "PATH" in str(error.value)
+
+
+def test_tesseract_configuration_uses_explicit_path_or_system_path(monkeypatch):
+    from app.rag import parser
+
+    original = parser.pytesseract.pytesseract.tesseract_cmd
+    try:
+        parser._configure_tesseract(None)
+        assert parser.pytesseract.pytesseract.tesseract_cmd == "tesseract"
+        parser._configure_tesseract("/opt/tesseract/bin/tesseract")
+        assert parser.pytesseract.pytesseract.tesseract_cmd == "/opt/tesseract/bin/tesseract"
+    finally:
+        parser.pytesseract.pytesseract.tesseract_cmd = original

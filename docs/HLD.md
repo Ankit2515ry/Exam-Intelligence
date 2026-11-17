@@ -1,6 +1,6 @@
 # Exam Intelligence: current high-level design
 
-Status: Phase 1, 2026-11-17. This describes the implementation and deployment
+Status: Phase 2B, 2026-11-17. This describes the implementation and deployment
 configuration in this checkout. Proposed work is labeled separately. See
 [LLD.md](LLD.md) for contracts and [BASELINE_REPORT.md](BASELINE_REPORT.md) for evidence.
 
@@ -57,8 +57,12 @@ returns an expiring JWT. The browser keeps it as `localStorage.userToken`, and a
 Axios interceptor attaches it to requests. Each protected request verifies the
 JWT and queries the user table. Logout deletes the browser token.
 
-Uploading a PDF writes a UUID-specific directory and file, commits a document
-record, parses pages, chunks text, batches embeddings into Chroma, and commits SQL
+Uploading a PDF first streams it through a size-limited validation gate. The gate
+uses the declared PDF MIME type, a PDF signature, and PyMuPDF parsing; it rejects
+empty, malformed, encrypted, unsupported, and oversized input. The client name is
+safe display metadata only. The server writes new content as
+`<UPLOAD_DIR>/<document UUID>/document.pdf`, then commits a document record,
+parses pages, chunks text, batches embeddings into Chroma, and commits SQL
 chunk records individually. These stores do not share a transaction. A failure
 can leave a document record, file, vectors, and some chunks behind.
 
@@ -81,7 +85,7 @@ chunks. Failures can leave partial deletion.
 |---|---|---|
 | Relational DB | Users, document metadata, duplicate chunk text/metadata, chat tables | External connection selected by `DATABASE_URL` |
 | Chroma collection `exam_intelligence` | Embeddings, passage text, owner/document/page/chunk metadata | Embedded `PersistentClient`, default `backend/chroma_db` when launched from backend |
-| Filesystem | Original PDFs under document UUID directories | Default `uploads`, relative to working directory |
+| Filesystem | Uploaded PDF bytes under document UUID directories; new files use server name `document.pdf` | Default `uploads`, relative to working directory |
 | Browser | JWT and in-memory messages | JWT persists in local storage; messages disappear on remount/reload |
 
 `CHUNKS_DIR` is created but is not the active chunk persistence mechanism.
@@ -95,8 +99,10 @@ Protected routes use bearer authentication and the ownership checks described
 above. Selected-document chat validates ownership before retrieval, while Chroma
 also applies the authenticated user ID to both global and document-scoped search.
 CORS currently permits all origins/methods/headers with credentials enabled.
-PDF validation checks the client-declared MIME type; a file-size limit, content
-validation, and safe filename normalization are not implemented in the route.
+PDF validation combines MIME, streamed size, signature, encryption, page-count,
+and page-load checks. `MAX_PDF_UPLOAD_SIZE_BYTES` defaults to 25 MiB. Client paths,
+absolute names, traversal, control characters, non-PDF suffixes, and overlong names
+are rejected. Pre-database failures remove their staged server-generated path.
 
 Embedding and reranking run locally. Retrieved passages and the user's question
 are sent to Gemini. Passwords are stored as hashes; JWT signing and Gemini keys
@@ -128,7 +134,12 @@ in-memory Chroma collection per case, synthetic PDFs, model doubles, and blocked
 outbound networking. No production stores, uploaded files, or model caches are
 opened. This test topology must not be confused with the application deployment.
 
-## Proposed improvements after Phase 2A: not implemented
+OCR is invoked only for pages whose extracted text is shorter than the existing
+threshold. `TESSERACT_CMD` may name the executable; when unset, pytesseract resolves
+`tesseract` through `PATH`. Missing Tesseract raises an error identifying the page
+and both configuration choices. Text PDFs do not require the executable.
+
+## Proposed improvements after Phase 2B: not implemented
 
 Next repair chunk-ID consistency and recoverable ingestion/deletion. Run the strict
 regressions after each repair and convert only the relevant expected failures to

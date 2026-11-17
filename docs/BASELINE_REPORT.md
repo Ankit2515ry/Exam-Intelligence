@@ -1,9 +1,43 @@
 # Phase 1 baseline report
 
 Review date: 2026-11-17. This report preserves the Phase 1 baseline and records the
-Phase 2A correctness comparison. Machine-readable measurements now represent the
-Phase 2A implementation in [baseline_results.json](baseline_results.json); the test
+Phase 2A correctness comparison and the Phase 2B upload-security verification.
+Machine-readable measurements represent the Phase 2B checkout in
+[baseline_results.json](baseline_results.json); the test
 design and limits remain in [TESTING_STRATEGY.md](TESTING_STRATEGY.md).
+
+## Phase 2B results: upload validation and OCR portability
+
+The authoritative isolated run completed with **70 passed, 7 strict expected
+failures, 0 failed, 0 errors, and 1 warning in 12.58 seconds**. A complete run
+without coverage reported the same outcomes in 10.03 seconds. Coverage displays
+**83%**: 931 statements, 769 covered lines, 162 missing lines, and 150 branches.
+The warning is the existing Starlette TestClient deprecation notice.
+
+The upload route now streams a maximum of `MAX_PDF_UPLOAD_SIZE_BYTES` (default
+25 MiB), validates the PDF signature/readability/page count/encryption before SQL
+creation, treats the safe original name only as metadata, and stores bytes at a
+server-generated `<UPLOAD_DIR>/<UUID>/document.pdf` path. Invalid MIME, spoofed,
+empty, corrupted, encrypted, oversized, traversal, and absolute-name inputs are
+covered with temporary directories and synthetic bytes/PDFs. Validation-failure
+cleanup is verified without opening production files.
+
+OCR configuration uses `TESSERACT_CMD` when set and the system `PATH` otherwise.
+Tests confirm that a normal text PDF does not call OCR, a scanned/blank synthetic
+page uses mocked OCR while retaining its page number, and missing Tesseract emits
+an understandable error. No real Tesseract, Gemini, model download, PostgreSQL,
+persistent Chroma, production document, or outbound network was used. Therefore
+these checks establish control-flow and resource behavior, not OCR accuracy or
+production performance.
+
+Frontend lint exited 0. The production build exited 0, transformed 1,807 modules,
+and completed in 721 ms. The generated bundle measurements are build output, not
+browser performance measurements.
+
+All Phase 2A document isolation, empty-retrieval, missing-chunk, and authentication
+tests remain passing. The same seven strict expected failures remain: BUG-05 SQL–
+Chroma chunk ID mismatch, five BUG-06 ingestion compensation stages, and BUG-06D
+partial deletion cleanup. Phase 2B intentionally did not repair those boundaries.
 
 ## Phase 2A results: document-specific retrieval and chat correctness
 
@@ -292,7 +326,7 @@ updates state from the promise completion, and uses a cleanup flag to ignore sta
 responses. The existing `loadDocs` helper still refreshes after upload and deletion.
 No route, API contract, user-facing feature, or RAG behavior was changed.
 
-## Recommendations after Phase 2A
+## Recommendations after Phase 2B
 
 1. Store each actual Chroma chunk ID in its SQL row and reconcile existing data if
    any production records depend on the incorrect references.
@@ -303,4 +337,4 @@ No route, API contract, user-facing feature, or RAG behavior was changed.
 4. Agree on a representative, permitted evaluation corpus and scoring protocol
    before changing chunking, retrieval, ranking, prompting, or model selection.
 
-Phase 2A stops here. Phase 2B and Phase 2C have not been implemented.
+Phase 2B stops here. Phase 2C has not been implemented.

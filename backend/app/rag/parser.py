@@ -36,23 +36,19 @@ import pytesseract
 from PIL import Image
 
 from app.utils.helpers import clean_text
+from app.config.settings import TESSERACT_CMD
 
 
 # =========================================================
 # TESSERACT CONFIGURATION
 # =========================================================
 
-# WINDOWS ONLY
-# Comment/remove on Linux or Mac
+def _configure_tesseract(command: str | None) -> None:
+    # pytesseract resolves this command through PATH when no explicit path is set.
+    pytesseract.pytesseract.tesseract_cmd = command or "tesseract"
 
-# pytesseract.pytesseract.tesseract_cmd = (
-#     r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-# )
 
-if os.name == "nt":
-    pytesseract.pytesseract.tesseract_cmd = (
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    )
+_configure_tesseract(TESSERACT_CMD)
 
 
 
@@ -117,7 +113,8 @@ class PDFParser:
 
     def perform_ocr_on_page(
         self,
-        page
+        page,
+        page_number: int | None = None
     ) -> str:
         """
         OCR fallback for scanned PDFs.
@@ -133,19 +130,33 @@ class PDFParser:
         Extract text
         """
 
-        pix = page.get_pixmap()
+        pixmap = page.get_pixmap()
 
-        image_bytes = pix.tobytes("png")
+        try:
+            image_bytes = pixmap.tobytes("png")
 
-        image = Image.open(
-            io.BytesIO(image_bytes)
-        )
+            with io.BytesIO(image_bytes) as image_stream:
+                with Image.open(image_stream) as image:
+                    try:
+                        ocr_text = pytesseract.image_to_string(
+                            image
+                        )
+                    except pytesseract.TesseractNotFoundError as exc:
+                        page_label = (
+                            f" on page {page_number}"
+                            if page_number is not None
+                            else ""
+                        )
+                        raise RuntimeError(
+                            "OCR is required"
+                            f"{page_label}, but Tesseract was not found. "
+                            "Install Tesseract and add it to PATH, or set "
+                            "TESSERACT_CMD to its executable path."
+                        ) from exc
 
-        ocr_text = pytesseract.image_to_string(
-            image
-        )
-
-        return ocr_text.strip()
+            return ocr_text.strip()
+        finally:
+            pixmap = None
 
     # =====================================================
     # MAIN PARSER
@@ -170,62 +181,57 @@ class PDFParser:
         ]
         """
 
-        doc = fitz.open(self.file_path)
-
         parsed_pages = []
 
         document_name = os.path.basename(
             self.file_path
         )
 
-        for page_number in range(len(doc)):
+        with fitz.open(self.file_path) as doc:
+            for page_number in range(len(doc)):
 
-            page = doc.load_page(page_number)
+                page = doc.load_page(page_number)
 
-            # Try normal extraction first
-            text = self.extract_text_from_page(
-                page
-            )
-
-            # OCR fallback for scanned PDFs
-            if len(text.strip()) < 20:
-
-                # print(
-                #     f"OCR running on page "
-                #     f"{page_number + 1}"
-                # )
-
-                text = self.perform_ocr_on_page(
+                # Try normal extraction first
+                text = self.extract_text_from_page(
                     page
                 )
 
-            # Clean extracted text
-            cleaned_text = clean_text(text)
+                # OCR fallback for scanned PDFs
+                if len(text.strip()) < 20:
 
-            # Skip empty pages
-            if not cleaned_text:
-                continue
+                    text = self.perform_ocr_on_page(
+                        page,
+                        page_number=page_number + 1
+                    )
 
-            # Structured page output
-            parsed_pages.append({
+                # Clean extracted text
+                cleaned_text = clean_text(text)
 
-                "page": page_number + 1,
+                # Skip empty pages
+                if not cleaned_text:
+                    continue
 
-                "text": cleaned_text,
+                # Structured page output
+                parsed_pages.append({
 
-                "metadata": {
+                    "page": page_number + 1,
 
-                    # Original file name
-                    "source": document_name,
+                    "text": cleaned_text,
 
-                    # Page number
-                    "page_number": (
-                        page_number + 1
-                    ),
+                    "metadata": {
 
-                    # Future metadata filtering
-                    "document_name": document_name
-                }
-            })
+                        # Original file name
+                        "source": document_name,
+
+                        # Page number
+                        "page_number": (
+                            page_number + 1
+                        ),
+
+                        # Future metadata filtering
+                        "document_name": document_name
+                    }
+                })
 
         return parsed_pages

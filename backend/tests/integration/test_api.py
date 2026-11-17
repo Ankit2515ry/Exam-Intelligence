@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -113,15 +114,89 @@ def test_chunk_ownership(auth_client, user, isolated_runtime):
     assert auth_client.get(f"/api/chunk/{chunk['chunk_id']}").status_code == 403
 
 
-def test_chat_request_response_contract(auth_client, user, monkeypatch):
+def test_chat_request_response_contract(auth_client, user, document_factory, monkeypatch):
     from app.api import chat
+    document = document_factory(user.id)
     calls = []
 
     def answer(**kwargs):
         calls.append(kwargs)
         return {"question": kwargs["question"], "answer": "mock", "sources": []}
     monkeypatch.setattr(chat, "chat_with_documents", answer)
-    response = auth_client.post("/api/chat", json={"question": "Explain", "top_k": 2, "document_id": "a-document-uuid"})
+    response = auth_client.post("/api/chat", json={
+        "question": "Explain",
+        "top_k": 2,
+        "document_id": document.document_uuid,
+    })
     assert response.json() == {"question": "Explain", "answer": "mock", "sources": []}
-    assert calls == [{"question": "Explain", "user_id": user.id, "document_id": "a-document-uuid"}]
+    assert calls == [{
+        "question": "Explain",
+        "user_id": user.id,
+        "document_id": document.document_uuid,
+    }]
     assert auth_client.post("/api/chat", json={}).status_code == 422
+
+
+def test_chat_global_scope_passes_no_document_filter(auth_client, user, monkeypatch):
+    from app.api import chat
+    calls = []
+
+    def answer(**kwargs):
+        calls.append(kwargs)
+        return {"question": kwargs["question"], "answer": "mock", "sources": []}
+
+    monkeypatch.setattr(chat, "chat_with_documents", answer)
+    response = auth_client.post("/api/chat", json={"question": "Explain"})
+    assert response.status_code == 200
+    assert calls == [{"question": "Explain", "user_id": user.id, "document_id": None}]
+
+
+def test_chat_empty_owned_document_returns_no_context(
+    auth_client,
+    user,
+    document_factory,
+    isolated_runtime,
+):
+    from app.services.chat_service import NO_CONTEXT_ANSWER
+    from app.rag import llm_service
+
+    document = document_factory(user.id)
+    response = auth_client.post("/api/chat", json={
+        "question": "Question without indexed context",
+        "document_id": document.document_uuid,
+    })
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "Question without indexed context",
+        "answer": NO_CONTEXT_ANSWER,
+        "sources": [],
+    }
+    assert llm_service.model.prompts == []
+
+
+def test_chat_selected_document_requires_ownership(
+    auth_client,
+    user_factory,
+    document_factory,
+    monkeypatch,
+):
+    from app.api import chat
+    other_user = user_factory("other-chat-owner@example.com")
+    other_document = document_factory(other_user.id)
+    service = Mock(side_effect=AssertionError("Unauthorized documents must not reach retrieval"))
+    monkeypatch.setattr(chat, "chat_with_documents", service)
+
+    forbidden = auth_client.post("/api/chat", json={
+        "question": "Explain",
+        "document_id": other_document.document_uuid,
+    })
+    assert forbidden.status_code == 403
+    assert forbidden.json() == {"detail": "Access denied"}
+
+    missing = auth_client.post("/api/chat", json={
+        "question": "Explain",
+        "document_id": "33333333-3333-4333-8333-333333333333",
+    })
+    assert missing.status_code == 404
+    assert missing.json() == {"detail": "Document not found"}
+    service.assert_not_called()

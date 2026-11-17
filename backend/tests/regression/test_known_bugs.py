@@ -1,8 +1,9 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
-from tests.support.corpus import DOCUMENT_A, scope_corpus
+from tests.support.corpus import DOCUMENT_A, make_chunk, scope_corpus
 from tests.support.failures import INGESTION_STAGES, inject_ingestion_failure, ingestion_artifacts
 from tests.support.known_bugs import KnownDefect, expect
 
@@ -10,19 +11,29 @@ from tests.support.known_bugs import KnownDefect, expect
 pytestmark = pytest.mark.regression
 
 
-@pytest.mark.xfail(strict=True, raises=KnownDefect, reason="BUG-01: vector search ignores document_id")
 def test_document_specific_search_excludes_other_documents(isolated_runtime):
     from app.rag.vectordb import search_chunks, store_chunks
-    store_chunks(scope_corpus())
+    store_chunks(scope_corpus() + [make_chunk(DOCUMENT_A, user_id=8, index=1)])
     result = search_chunks("normalization", user_id=7, top_k=5, document_id=DOCUMENT_A)
     metadata = result["metadatas"][0]
     assert metadata, "Fixture must return candidates"
     assert all(item["user_id"] == 7 for item in metadata)
-    expect(all(item["document_id"] == DOCUMENT_A for item in metadata),
-           f"Other documents returned: {[item['document_id'] for item in metadata]}")
+    assert all(item["document_id"] == DOCUMENT_A for item in metadata)
+    assert len(metadata) == 2
 
 
-@pytest.mark.xfail(strict=True, raises=KnownDefect, reason="BUG-02: numeric UI selection is accepted at UUID boundary")
+def test_global_search_includes_all_owner_documents_only(isolated_runtime):
+    from app.rag.vectordb import search_chunks, store_chunks
+    from tests.support.corpus import DOCUMENT_B
+
+    store_chunks(scope_corpus())
+    result = search_chunks("normalization", user_id=7, top_k=5)
+    metadata = result["metadatas"][0]
+    assert len(metadata) == 4
+    assert all(item["user_id"] == 7 for item in metadata)
+    assert {item["document_id"] for item in metadata} == {DOCUMENT_A, DOCUMENT_B}
+
+
 def test_numeric_document_id_is_rejected_at_uuid_contract(auth_client, user, document_factory, monkeypatch):
     from app.api import chat
     document = document_factory(user.id)
@@ -33,29 +44,38 @@ def test_numeric_document_id_is_rejected_at_uuid_contract(auth_client, user, doc
         calls.append(kwargs)
         return {"question": kwargs["question"], "answer": "mock", "sources": []}
     monkeypatch.setattr(chat, "chat_with_documents", answer)
-    # Replays the current Chat.jsx option value (SQL id), without claiming a browser test.
+    # Protects the UUID boundary from the former Chat.jsx numeric payload.
     response = auth_client.post("/api/chat", json={"question": "Explain normalization", "document_id": str(document.id)})
-    expect(response.status_code == 422,
-           f"UUID contract accepted numeric id: HTTP {response.status_code}, service calls={calls}")
+    assert response.status_code == 422
+    assert calls == []
 
 
-@pytest.mark.xfail(strict=True, raises=UnboundLocalError, reason="BUG-03: no prompt exists when retrieval is empty")
-def test_empty_retrieval_returns_a_response_without_crashing():
-    from app.services.chat_service import chat_with_documents
-    result = chat_with_documents("Question without uploaded documents", user_id=7)
+def test_empty_retrieval_returns_a_response_without_crashing(monkeypatch):
+    from app.services import chat_service
+    prompt = Mock(side_effect=AssertionError("Prompt must not be built without context"))
+    generate = Mock(side_effect=AssertionError("LLM must not be called without context"))
+    monkeypatch.setattr(chat_service, "build_prompt", prompt)
+    monkeypatch.setattr(chat_service, "generate_answer", generate)
+    result = chat_service.chat_with_documents("Question without uploaded documents", user_id=7)
+    assert result == {
+        "question": "Question without uploaded documents",
+        "answer": chat_service.NO_CONTEXT_ANSWER,
+        "sources": [],
+    }
     assert result["sources"] == []
+    prompt.assert_not_called()
+    generate.assert_not_called()
 
 
-@pytest.mark.xfail(strict=True, raises=IndexError, reason="BUG-04: missing metadata indexed before empty check")
 def test_missing_chunk_lookup_returns_empty_results():
     from app.rag.vectordb import get_chunk_by_id
     assert get_chunk_by_id("missing-chunk")["ids"] == []
 
 
-@pytest.mark.xfail(strict=True, raises=KnownDefect, reason="BUG-04: missing chunk API returns 500 instead of 404")
 def test_missing_chunk_api_returns_404(auth_client):
     response = auth_client.get("/api/chunk/missing-chunk")
-    expect(response.status_code == 404, f"Missing chunk returned HTTP {response.status_code}")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Chunk not found"}
 
 
 @pytest.mark.xfail(strict=True, raises=KnownDefect, reason="BUG-05: SQL chroma_id is generated independently")

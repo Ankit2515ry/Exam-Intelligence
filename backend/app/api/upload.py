@@ -13,6 +13,7 @@ Responsibilities:
 """
 
 import logging
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from fastapi import (
     APIRouter,
@@ -28,15 +29,16 @@ from fastapi.responses import (
 
 from sqlalchemy.orm import Session
 
-import shutil
 import os
 import uuid
+import fitz
 
 
 
 from app.config.settings import (
     UPLOAD_DIR,
-    CHUNKS_DIR
+    CHUNKS_DIR,
+    MAX_PDF_UPLOAD_SIZE_BYTES
 )
 
 from app.services.ingestion_service import (
@@ -69,6 +71,164 @@ from app.db.crud.document import (
 )
 
 logger = logging.getLogger(__name__)
+
+UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
+STORED_PDF_FILENAME = "document.pdf"
+
+
+def _safe_display_filename(filename: str | None) -> str:
+    """Validate a client filename for display metadata only."""
+    if not filename or not filename.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="A PDF filename is required"
+        )
+
+    if "\x00" in filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid PDF filename"
+        )
+
+    posix_path = PurePosixPath(filename.replace("\\", "/"))
+    windows_path = PureWindowsPath(filename)
+
+    if (
+        posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or len(posix_path.parts) != 1
+        or any(part in {".", ".."} for part in posix_path.parts)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid PDF filename"
+        )
+
+    safe_name = "".join(
+        character
+        for character in posix_path.name.strip()
+        if character.isprintable()
+    )
+
+    if not safe_name or not safe_name.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded filename must end with .pdf"
+        )
+
+    if len(safe_name) > 255:
+        raise HTTPException(
+            status_code=400,
+            detail="PDF filename is too long"
+        )
+
+    return safe_name
+
+
+def _storage_paths(document_uuid: str) -> tuple[Path, Path]:
+    """Create a server-controlled path inside the configured upload root."""
+    upload_root = Path(UPLOAD_DIR).resolve()
+    document_folder = (upload_root / document_uuid).resolve()
+    file_path = (document_folder / STORED_PDF_FILENAME).resolve()
+
+    if (
+        not document_folder.is_relative_to(upload_root)
+        or not file_path.is_relative_to(document_folder)
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create a safe upload path"
+        )
+
+    document_folder.mkdir(parents=True, exist_ok=False)
+    return document_folder, file_path
+
+
+async def _stream_pdf_to_disk(
+    file: UploadFile,
+    file_path: Path
+) -> int:
+    """Stream at most the configured number of bytes to a staged file."""
+    total_size = 0
+
+    with file_path.open("xb") as buffer:
+        while True:
+            remaining = MAX_PDF_UPLOAD_SIZE_BYTES - total_size
+            read_size = min(
+                UPLOAD_READ_CHUNK_SIZE,
+                remaining + 1
+            )
+            chunk = await file.read(read_size)
+
+            if not chunk:
+                break
+
+            total_size += len(chunk)
+
+            if total_size > MAX_PDF_UPLOAD_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        "PDF exceeds the maximum upload size of "
+                        f"{MAX_PDF_UPLOAD_SIZE_BYTES} bytes"
+                    )
+                )
+
+            buffer.write(chunk)
+
+    if total_size == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="PDF file is empty"
+        )
+
+    return total_size
+
+
+def _validate_pdf_content(file_path: Path) -> None:
+    """Confirm the staged bytes are a readable, non-encrypted PDF with pages."""
+    with file_path.open("rb") as stream:
+        if stream.read(5) != b"%PDF-":
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded content is not a PDF"
+            )
+
+    try:
+        with fitz.open(file_path) as document:
+            if document.needs_pass:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Encrypted PDFs are not supported"
+                )
+
+            if document.page_count == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="PDF contains no pages"
+                )
+
+            for page_number in range(document.page_count):
+                document.load_page(page_number)
+    except HTTPException:
+        raise
+    except (fitz.FileDataError, RuntimeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="PDF is malformed or corrupted"
+        ) from exc
+
+
+def _cleanup_staged_upload(
+    document_folder: Path | None,
+    file_path: Path | None
+) -> None:
+    """Remove only the server-generated staged path after pre-database failure."""
+    if file_path is not None and file_path.exists():
+        file_path.unlink()
+
+    if document_folder is not None and document_folder.exists():
+        document_folder.rmdir()
 
 
 # =========================================================
@@ -127,101 +287,91 @@ async def upload_pdf(
 
     logger.info("PDF upload received for user_id=%s", current_user.id)
 
-    # -----------------------------------------------------
-    # VALIDATE FILE TYPE
-    # -----------------------------------------------------
-
-    if file.content_type != "application/pdf":
-
-        logger.warning(
-            "Rejected upload with unsupported content type for user_id=%s",
-            current_user.id,
-        )
-        raise HTTPException(
-
-            status_code=400,
-
-            detail="Only PDF files are allowed"
-        )
-
-    # -----------------------------------------------------
-    # GENERATE DOCUMENT UUID
-    # -----------------------------------------------------
-
-    document_uuid = str(uuid.uuid4())
-
-    # -----------------------------------------------------
-    # CREATE DOCUMENT FOLDER
-    # -----------------------------------------------------
-
-    document_folder = os.path.join(
-        UPLOAD_DIR,
-        document_uuid
-    )
-
-    os.makedirs(
-        document_folder,
-        exist_ok=True
-    )
-
-    # -----------------------------------------------------
-    # SAVE FILE
-    # -----------------------------------------------------
-
-    file_path = os.path.join(
-        document_folder,
-        file.filename
-    )
-
-
-
-    with open(file_path, "wb") as buffer:
-
-        shutil.copyfileobj(
-            file.file,
-            buffer
-        )
-
-    # -----------------------------------------------------
-    # STORE DOCUMENT IN DATABASE
-    # -----------------------------------------------------
-
-    document = create_document(
-
-        db=db,
-
-        title=file.filename,
-
-        filename=file.filename,
-
-        file_path=file_path,
-
-        subject="General",
-
-        uploaded_by=current_user.id,
-
-        document_uuid=document_uuid
-    )
-
-    # -----------------------------------------------------
-    # INGEST DOCUMENT
-    # -----------------------------------------------------
+    document_folder = None
+    file_path = None
+    document = None
 
     try:
+        if file.content_type != "application/pdf":
+            logger.warning(
+                "Rejected upload with unsupported content type for user_id=%s",
+                current_user.id,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="Only PDF files are allowed"
+            )
+
+        display_filename = _safe_display_filename(
+            file.filename
+        )
+        document_uuid = str(uuid.uuid4())
+        document_folder, file_path = _storage_paths(
+            document_uuid
+        )
+        await _stream_pdf_to_disk(
+            file=file,
+            file_path=file_path
+        )
+        _validate_pdf_content(file_path)
+
+        # -----------------------------------------------------
+        # STORE DOCUMENT IN DATABASE
+        # -----------------------------------------------------
+
+        document = create_document(
+
+            db=db,
+
+            title=display_filename,
+
+            filename=display_filename,
+
+            file_path=str(file_path),
+
+            subject="General",
+
+            uploaded_by=current_user.id,
+
+            document_uuid=document_uuid
+        )
+
+        # -----------------------------------------------------
+        # INGEST DOCUMENT
+        # -----------------------------------------------------
         ingestion_result = ingest_document(
-            file_path=file_path,
+            file_path=str(file_path),
             db=db,
             document_db_id=document.id,
             document_uuid=document.document_uuid,
             user_id=current_user.id,
         )
-    except Exception:
-        logger.exception(
-            "PDF ingestion failed for document_uuid=%s user_id=%s",
-            document.document_uuid,
+    except HTTPException:
+        if document is None:
+            _cleanup_staged_upload(
+                document_folder=document_folder,
+                file_path=file_path
+            )
+        logger.warning(
+            "Rejected PDF upload for user_id=%s",
             current_user.id,
         )
         raise
+    except Exception:
+        if document is None:
+            _cleanup_staged_upload(
+                document_folder=document_folder,
+                file_path=file_path
+            )
+
+        logger.exception(
+            "PDF upload or ingestion failed for document_uuid=%s user_id=%s",
+            document.document_uuid if document is not None else "not-created",
+            current_user.id,
+        )
+        raise
+    finally:
+        await file.close()
 
     logger.info(
         "PDF ingestion completed for document_uuid=%s pages=%s chunks=%s",

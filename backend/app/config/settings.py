@@ -44,6 +44,23 @@ CHUNKS_DIR = os.getenv("CHUNKS_DIR", "chunks")
 
 VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR", "chroma_db")
 
+# Maximum accepted PDF size. The upload route enforces this while streaming.
+MAX_PDF_UPLOAD_SIZE_BYTES = int(
+    os.getenv(
+        "MAX_PDF_UPLOAD_SIZE_BYTES",
+        str(25 * 1024 * 1024)
+    )
+)
+
+if MAX_PDF_UPLOAD_SIZE_BYTES <= 0:
+    raise ValueError(
+        "MAX_PDF_UPLOAD_SIZE_BYTES must be greater than zero"
+    )
+
+# Optional absolute path to the Tesseract executable. When unset, pytesseract
+# resolves the `tesseract` command through the operating system PATH.
+TESSERACT_CMD = os.getenv("TESSERACT_CMD")
+
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(CHUNKS_DIR, exist_ok=True)
