@@ -75,7 +75,7 @@ Measured 2026-11-18 during controlled evaluation indexing of all 10 approved eva
   - Page throughput: **10.87 pages/second** (796 pages / 73.204 s)
   - Data throughput: **1.10 MiB/second** (76.79 MiB / 73.204 s)
   - Chunk throughput: **47.11 chunks/second** (3,449 chunks / 73.204 s)
-- **Text-Rich Documents (No OCR, 6 docs, 617 pages, 2,885 chunks):**
+- **Text-Rich Documents (No OCR, 6 docs, 617 pages, 2,935 chunks):**
   - Cumulative ingestion duration: **29,822.9 ms** (~29.82 s)
   - Page throughput: **20.69 pages/second** (617 pages / 29.823 s)
   - Embedding duration: **25,607.2 ms** (85.86% of text ingestion time)

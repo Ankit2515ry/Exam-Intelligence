@@ -257,3 +257,17 @@ of scope pending approval.
 - [x] Re-verify test suite: 107 tests pass.
 
 Genuine RAG accuracy remains **NOT MEASURED** pending pilot/gold dataset authoring. All 10 selected PDFs are fully indexed. No Gemini calls were made.
+
+## Phase 4D: evaluation dataset preparation and validation
+
+- [x] Reconcile Phase 4C performance documentation: confirmed raw per-document chunk counts ($514 \text{ OCR} + 2,935 \text{ text-rich} = 3,449 \text{ total}$) and corrected text-rich chunk subtotal in `docs/PERFORMANCE_BASELINE.md` from 2,885 to 2,935.
+- [x] Read and inspect existing dataset schema (`app/evaluation/dataset.py`), pilot template, and review draft (`backend/evaluation/private/pilot_questions_review.md`).
+- [x] Convert review draft into standard evaluation schema at `backend/evaluation/private/pilot-v1.json` with 15 questions (`Q01` through `Q15`).
+- [x] Map document UUIDs to indexed evaluation PDFs (`10 RAG Architectures.pdf`: 5, `DBMS.pdf`: 5, `Operating-Systems.pdf`: 5).
+- [x] Verify evidence on physical PDF pages via PyMuPDF text extraction; align verbatim text and bullets (`\u200b`, `\x07`) to eliminate extraction discrepancies.
+- [x] Inspect retrieval label granularity: confirmed that relevance in `app.evaluation.metrics.result_relevance` is evaluated strictly at the supporting text span level within document UUID and page boundaries, not coarse document-level matching.
+- [x] Dual-verify all supporting spans against indexed ChromaDB chunk boundaries: mapped 100% of the 15 questions to indexed chunk UUIDs and chunk indices in `backend/evaluation/private/chunk_mapping_results.json`.
+- [x] Evaluate unanswerable candidates: confirmed U01 is genuinely unanswerable across the complete 8-page text of `10 RAG Architectures.pdf` (0 occurrences of Gemini, Google, worldwide, 2025); evaluated U02 against `DBMS.pdf` and proposed realistic alternative.
+- [x] Run pilot dataset validator (`backend/scripts/rag_evaluation.py --pilot`): verified **0 errors and 15 draft warnings**.
+- [x] Verify safety halt on unapproved pilot execution: verified runner strictly blocks execution (`ready_for_pilot_run: false`, `require_approved=True`) until human review and approval.
+- [x] Ensure all 107 existing backend tests continue to pass. Zero Gemini calls made; no RAG algorithms modified.

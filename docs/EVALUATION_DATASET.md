@@ -151,6 +151,31 @@ An approved 10–15 record pilot can be run retrieval-only with:
 
 Phase 4B explicitly prohibits `--generate-answers`; the pilot run makes no Gemini call.
 
+## Phase 4D: Verified pilot dataset (pilot-v1)
+
+Prepared 2026-11-18 at `backend/evaluation/private/pilot-v1.json`:
+
+- **Version:** `pilot-v1`
+- **Total Questions:** 15 (`Q01` to `Q15`)
+- **Document Scope:**
+  - `10 RAG Architectures.pdf` (`cbd60b93-0e2b-4e19-b8ad-d63461eac601`): Q01–Q05 (5 questions)
+  - `DBMS.pdf` (`f513d63e-e487-4d83-b40a-af81169662de`): Q06–Q10 (5 questions)
+  - `Operating-Systems.pdf` (`6c04513a-30bd-4fea-814c-9f07c1e9c0b7`): Q11–Q15 (5 questions)
+- **Category Counts:**
+  - `direct_factual`: 8 (`Q01`, `Q03`, `Q06`, `Q07`, `Q09`, `Q10`, `Q13`, `Q15`)
+  - `paraphrased_semantic`: 2 (`Q02`, `Q12`)
+  - `multi_step_reasoning`: 5 (`Q04`, `Q05`, `Q08`, `Q11`, `Q14`)
+- **Evidence Verification:**
+  - Every cited page and supporting passage was verified against the original PDF via PyMuPDF text extraction.
+  - Every supporting span was dual-verified to match within indexed ChromaDB chunk boundaries, ensuring scoring granularity operates at the text passage level.
+  - 100% of the 15 questions have mapped indexed chunk IDs recorded in `backend/evaluation/private/chunk_mapping_results.json`.
+- **Unanswerable Candidates Evaluated:**
+  - Candidate U01 ("What was Google's worldwide Gemini API revenue in 2025?"): Verified genuinely unanswerable across the entire 8-page text of `10 RAG Architectures.pdf` (0 occurrences of Gemini, Google, worldwide, 2025).
+  - Candidate U02 ("What is the private password of the DBMS book's author?"): Unrealistic user question. A domain-realistic student alternative: "What are the replica set election rules for MongoDB in this DBMS course?" (0 occurrences of MongoDB in `DBMS.pdf`).
+  - Pilot currently contains all 15 answerable questions; candidate unanswerables are ready to replace 2 questions pending human review.
+- **Reviewer Status:** All 15 records are marked `reviewer_status: "draft"`.
+- **Validation Status:** `validate_pilot` passes with **0 errors and 15 draft warnings**. Execution via `--run-pilot` is intentionally blocked until human approval is marked.
+
 ## Isolated evaluation startup
 
 The private file `evaluation/private/evaluation-corpus-v1.env` is created only by

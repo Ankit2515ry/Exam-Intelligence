@@ -45,6 +45,25 @@ final top-k, fusion weights, generation flag, sample count, metrics, retrieval
 latency, errors, exclusions, and per-question ranked results. CSV and Markdown
 outputs accompany it. Phase 3 performance metrics may be enabled independently.
 
+## Phase 4D: Pilot dataset and retrieval label granularity
+
+As of Phase 4D (2026-11-18), the evaluation framework has a prepared and validated pilot dataset:
+
+- **Dataset File:** `backend/evaluation/private/pilot-v1.json` (version `pilot-v1`).
+- **Question Count:** 15 questions (`Q01`–`Q15`).
+- **Target Documents:**
+  - `10 RAG Architectures.pdf` (`cbd60b93-0e2b-4e19-b8ad-d63461eac601`): 5 questions (Q01–Q05).
+  - `DBMS.pdf` (`f513d63e-e487-4d83-b40a-af81169662de`): 5 questions (Q06–Q10).
+  - `Operating-Systems.pdf` (`6c04513a-30bd-4fea-814c-9f07c1e9c0b7`): 5 questions (Q11–Q15).
+- **Category Composition:** `direct_factual`: 8, `paraphrased_semantic`: 2, `multi_step_reasoning`: 5.
+- **Relevance Granularity:** In `app.evaluation.metrics.result_relevance`, a retrieved chunk is scored as relevant if and only if:
+  1. `chunk.document_id == unit.document_id`
+  2. `chunk.page == unit.page`
+  3. `_normalize(span) in _normalize(chunk.content) or _normalize(chunk.content) in _normalize(span)`
+  Matching document ID or page alone without text overlap scores zero relevance. Every span in `pilot-v1.json` was verified against both the physical PDF page text and the indexed ChromaDB chunk text boundaries.
+- **Reviewer Status:** All records are currently marked `reviewer_status: "draft"`.
+- **Mandatory Approval Barrier:** The runner enforces `require_approved=True` and `validate_pilot` enforces `ready_for_pilot_run: all(record["reviewer_status"] == "approved")`. Unapproved draft records cannot be executed by `--run-pilot`.
+
 ## Commands
 
 Retrieval-only validation-set evaluation:
