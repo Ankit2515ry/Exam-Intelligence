@@ -150,3 +150,29 @@ An approved 10–15 record pilot can be run retrieval-only with:
 ```
 
 Phase 4B explicitly prohibits `--generate-answers`; the pilot run makes no Gemini call.
+
+## Isolated evaluation startup
+
+The private file `evaluation/private/evaluation-corpus-v1.env` is created only by
+the approved provisioning command and is gitignored. Every evaluation invocation
+must name it explicitly. Do not rely on the regular `.env`.
+
+```powershell
+$envFile = (Resolve-Path evaluation\private\evaluation-corpus-v1.env).Path
+.\venv\Scripts\python.exe -B -m scripts.evaluation_preflight `
+  --evaluation-env $envFile --mode infrastructure --require-ready
+.\venv\Scripts\python.exe -B -m scripts.evaluation_preflight `
+  --evaluation-env $envFile --mode full --verify-regular-env .env --require-ready
+```
+
+Infrastructure mode is safe before schema/account bootstrap. Full mode additionally
+requires the dedicated evaluation account, schema, zero owned documents, nondefault
+Chroma/uploads, and absence of that account from the regular database. It exits
+nonzero if any check fails. Set `EVALUATION_ENV_FILE` to this private file before
+launching the backend; the application loader uses it with override precedence and
+requires the evaluation-mode marker, preventing regular `.env` resource fallback.
+
+Provisioning is a separately approved, one-time action. The provisioner creates
+only `exam_intelligence_evaluation`, the three approved private directories, the
+application schema, and the dedicated account; it refuses to use the evaluation DB
+as its source database and never resets or migrates `exam_intelligence`.

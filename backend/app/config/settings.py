@@ -25,11 +25,11 @@ This file will be used by:
 
 import os
 
-from dotenv import load_dotenv
+from app.config.environment import load_application_environment
 
 
 # Load environment variables from .env
-load_dotenv()
+load_application_environment()
 
 
 # =========================================================

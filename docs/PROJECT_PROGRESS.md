@@ -225,3 +225,17 @@ quality remains NOT MEASURED. Phase 5 was not started.
 Final Phase 4B verification: **104 passed, 0 xfailed, 0 failed, 0 errors, and
 1 warning**. Displayed coverage remains **83%**. Frontend lint and production
 build pass; no frontend source changed.
+
+## Phase 4B: isolated evaluation bootstrap
+
+- [x] Add explicit evaluation-environment loading that overrides regular `.env`.
+- [x] Split preflight into infrastructure and full account-readiness modes.
+- [x] Create `exam_intelligence_evaluation` without modifying `exam_intelligence`.
+- [x] Create only private evaluation Chroma, upload, and chunks directories.
+- [x] Initialize the schema and create one dedicated evaluation application account.
+- [x] Verify zero documents/vectors/uploads and account absence from the regular DB.
+- [x] Add a launch guard that rejects any regular-resource fallback.
+
+The isolated environment is ready but the selected corpus remains entirely
+unindexed. PDF indexing, Gemini calls, Phase 5, and retrieval changes remain out
+of scope pending approval.

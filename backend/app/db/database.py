@@ -1,12 +1,12 @@
 from sqlalchemy import create_engine
 
-from dotenv import load_dotenv
+from app.config.environment import load_application_environment
 
 import os
 
 
 # Load environment variables
-load_dotenv()
+load_application_environment()
 
 
 # PostgreSQL connection URL

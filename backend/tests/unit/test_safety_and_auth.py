@@ -42,6 +42,22 @@ def test_password_hash_and_token_validation():
     assert verify_token(expired) is None
 
 
+def test_explicit_evaluation_environment_overrides_regular_dotenv(monkeypatch, tmp_path):
+    from app.config.environment import load_application_environment
+
+    evaluation_env = tmp_path / "evaluation.env"
+    evaluation_env.write_text(
+        "EXAM_INTELLIGENCE_EVALUATION_MODE=true\nDATABASE_URL=postgresql://evaluation-only\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("DATABASE_URL", "postgresql://regular-only")
+    monkeypatch.setenv("EVALUATION_ENV_FILE", str(evaluation_env))
+
+    load_application_environment()
+
+    assert os.environ["DATABASE_URL"] == "postgresql://evaluation-only"
+
+
 def test_chunk_consistency_audit_is_read_only(auth_client, db, isolated_runtime, pdf_bytes):
     from app.db.models.chunk import Chunk
     from scripts.check_chunk_consistency import collect_consistency_report
