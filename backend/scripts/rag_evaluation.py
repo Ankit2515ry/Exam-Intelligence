@@ -3,10 +3,17 @@
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+backend_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(backend_root))
+
+# Default to isolated evaluation environment if available
+default_eval_env = backend_root / "evaluation" / "private" / "evaluation-corpus-v1.env"
+if default_eval_env.is_file() and not os.getenv("EVALUATION_ENV_FILE"):
+    os.environ["EVALUATION_ENV_FILE"] = str(default_eval_env)
 
 from app.evaluation.dataset import split_dataset, validate_dataset
 

@@ -157,22 +157,24 @@ Prepared 2026-11-18 at `backend/evaluation/private/pilot-v1.json`:
 
 - **Version:** `pilot-v1`
 - **Total Questions:** 15 (`Q01` to `Q15`)
+- **Answerability:** 13 Answerable, 2 Unanswerable (Q05 and Q10)
 - **Document Scope:**
-  - `10 RAG Architectures.pdf` (`cbd60b93-0e2b-4e19-b8ad-d63461eac601`): Q01–Q05 (5 questions)
-  - `DBMS.pdf` (`f513d63e-e487-4d83-b40a-af81169662de`): Q06–Q10 (5 questions)
-  - `Operating-Systems.pdf` (`6c04513a-30bd-4fea-814c-9f07c1e9c0b7`): Q11–Q15 (5 questions)
+  - `10 RAG Architectures.pdf` (`cbd60b93-0e2b-4e19-b8ad-d63461eac601`): Q01–Q05 (4 answerable, 1 unanswerable: Q05)
+  - `DBMS.pdf` (`f513d63e-e487-4d83-b40a-af81169662de`): Q06–Q10 (4 answerable, 1 unanswerable: Q10)
+  - `Operating-Systems.pdf` (`6c04513a-30bd-4fea-814c-9f07c1e9c0b7`): Q11–Q15 (5 answerable)
 - **Category Counts:**
-  - `direct_factual`: 8 (`Q01`, `Q03`, `Q06`, `Q07`, `Q09`, `Q10`, `Q13`, `Q15`)
+  - `direct_factual`: 7 (`Q01`, `Q03`, `Q06`, `Q07`, `Q09`, `Q13`, `Q15`)
   - `paraphrased_semantic`: 2 (`Q02`, `Q12`)
-  - `multi_step_reasoning`: 5 (`Q04`, `Q05`, `Q08`, `Q11`, `Q14`)
+  - `multi_step_reasoning`: 4 (`Q04`, `Q08`, `Q11`, `Q14`)
+  - `unanswerable`: 2 (`Q05`, `Q10`)
 - **Evidence Verification:**
   - Every cited page and supporting passage was verified against the original PDF via PyMuPDF text extraction.
   - Every supporting span was dual-verified to match within indexed ChromaDB chunk boundaries, ensuring scoring granularity operates at the text passage level.
-  - 100% of the 15 questions have mapped indexed chunk IDs recorded in `backend/evaluation/private/chunk_mapping_results.json`.
-- **Unanswerable Candidates Evaluated:**
-  - Candidate U01 ("What was Google's worldwide Gemini API revenue in 2025?"): Verified genuinely unanswerable across the entire 8-page text of `10 RAG Architectures.pdf` (0 occurrences of Gemini, Google, worldwide, 2025).
-  - Candidate U02 ("What is the private password of the DBMS book's author?"): Unrealistic user question. A domain-realistic student alternative: "What are the replica set election rules for MongoDB in this DBMS course?" (0 occurrences of MongoDB in `DBMS.pdf`).
-  - Pilot currently contains all 15 answerable questions; candidate unanswerables are ready to replace 2 questions pending human review.
+  - 100% of the 13 answerable questions have mapped indexed chunk IDs recorded in `backend/evaluation/private/chunk_mapping_results.json`.
+- **Unanswerable Questions Verification:**
+  - Q05 ("What was Google's worldwide Gemini API revenue in 2025?"): Verified genuinely unanswerable across the entire 8-page text of `10 RAG Architectures.pdf` (0 occurrences of Gemini, Google, worldwide, 2025; revenue occurs only in an unrelated Tesla/BYD prompt example on page 2).
+  - Q10 ("What are the MongoDB replica-set election rules?"): Verified genuinely unanswerable across the entire 231-page text of `DBMS.pdf` (204,220 characters, 0 occurrences of MongoDB, replica, quorum, consensus, raft, paxos, nosql).
+- **Human Review Sheet:** Detailed question-by-question review sheet created at [EVALUATION_REVIEW.md](EVALUATION_REVIEW.md).
 - **Reviewer Status:** All 15 records are marked `reviewer_status: "draft"`.
 - **Validation Status:** `validate_pilot` passes with **0 errors and 15 draft warnings**. Execution via `--run-pilot` is intentionally blocked until human approval is marked.
 

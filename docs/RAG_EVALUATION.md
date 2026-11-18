@@ -55,14 +55,38 @@ As of Phase 4D (2026-11-18), the evaluation framework has a prepared and validat
   - `10 RAG Architectures.pdf` (`cbd60b93-0e2b-4e19-b8ad-d63461eac601`): 5 questions (Q01–Q05).
   - `DBMS.pdf` (`f513d63e-e487-4d83-b40a-af81169662de`): 5 questions (Q06–Q10).
   - `Operating-Systems.pdf` (`6c04513a-30bd-4fea-814c-9f07c1e9c0b7`): 5 questions (Q11–Q15).
-- **Category Composition:** `direct_factual`: 8, `paraphrased_semantic`: 2, `multi_step_reasoning`: 5.
+- **Category Composition:** `direct_factual`: 7, `paraphrased_semantic`: 2, `multi_step_reasoning`: 4, `unanswerable`: 2.
+- **Answerability:** 13 answerable questions, 2 unanswerable questions (Q05 on 10 RAG Architectures and Q10 on DBMS).
+- **Human Review Sheet:** Documented in [EVALUATION_REVIEW.md](EVALUATION_REVIEW.md).
 - **Relevance Granularity:** In `app.evaluation.metrics.result_relevance`, a retrieved chunk is scored as relevant if and only if:
   1. `chunk.document_id == unit.document_id`
   2. `chunk.page == unit.page`
   3. `_normalize(span) in _normalize(chunk.content) or _normalize(chunk.content) in _normalize(span)`
   Matching document ID or page alone without text overlap scores zero relevance. Every span in `pilot-v1.json` was verified against both the physical PDF page text and the indexed ChromaDB chunk text boundaries.
-- **Reviewer Status:** All records are currently marked `reviewer_status: "draft"`.
-- **Mandatory Approval Barrier:** The runner enforces `require_approved=True` and `validate_pilot` enforces `ready_for_pilot_run: all(record["reviewer_status"] == "approved")`. Unapproved draft records cannot be executed by `--run-pilot`.
+- **Reviewer Status:** All 15 records were formally approved (`reviewer_status: "approved"`).
+- **Mandatory Approval Barrier:** The runner enforces `require_approved=True` and `validate_pilot` enforces `ready_for_pilot_run: all(record["reviewer_status"] == "approved")`.
+
+## Phase 4E: Empirical Pilot Retrieval Evaluation Run
+
+The official pilot retrieval evaluation was executed on 2026-11-18 using:
+```powershell
+cd backend
+.\venv\Scripts\python.exe scripts/rag_evaluation.py evaluation/private/pilot-v1.json --pilot --run-pilot --manifest evaluation/private/corpus-v1-selection.json --corpus-dir evaluation/corpus/corpus-v1 --corpus-version corpus-v1 --user-id 1 --output evaluation/results/pilot-v1
+```
+
+- **Run ID:** `a79bc81a-bd63-4e21-8c96-4b8f8d4bf3df`
+- **Output Artifacts:** Emitted to `backend/evaluation/results/pilot-v1/` (`evaluation-results.json`, `evaluation-results.csv`, `evaluation-results.md`).
+- **Isolation:** Executed exclusively against the dedicated `exam_intelligence_evaluation` database and `backend/evaluation/private/chroma-corpus-v1` vector store.
+- **Empirical Metrics:**
+  - **Hit@5:** **84.62%** (11/13 eligible answerable questions)
+  - **Precision@5:** **20.00%** (0.2000)
+  - **Recall@5:** **66.67%** (0.6667)
+  - **MRR@10:** **0.7372**
+  - **nDCG@5:** **0.6586**
+  - **Latency:** Total run duration **1,080.21 ms**; Mean per-query latency **64.37 ms**; Median **60.15 ms**; Warm range **46.60 – 66.02 ms** (Cold start: 144.64 ms).
+  - **Generation:** Zero Gemini API calls; answer generation explicitly disabled.
+  - **Errors:** 0 errors, 0 exceptions across all 15 questions.
+- **Final Resume Bullets:** Synthesized in Google XYZ format and documented in [RESUME_FINAL.md](RESUME_FINAL.md).
 
 ## Commands
 

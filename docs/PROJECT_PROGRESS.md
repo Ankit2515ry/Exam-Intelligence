@@ -267,7 +267,27 @@ Genuine RAG accuracy remains **NOT MEASURED** pending pilot/gold dataset authori
 - [x] Verify evidence on physical PDF pages via PyMuPDF text extraction; align verbatim text and bullets (`\u200b`, `\x07`) to eliminate extraction discrepancies.
 - [x] Inspect retrieval label granularity: confirmed that relevance in `app.evaluation.metrics.result_relevance` is evaluated strictly at the supporting text span level within document UUID and page boundaries, not coarse document-level matching.
 - [x] Dual-verify all supporting spans against indexed ChromaDB chunk boundaries: mapped 100% of the 15 questions to indexed chunk UUIDs and chunk indices in `backend/evaluation/private/chunk_mapping_results.json`.
-- [x] Evaluate unanswerable candidates: confirmed U01 is genuinely unanswerable across the complete 8-page text of `10 RAG Architectures.pdf` (0 occurrences of Gemini, Google, worldwide, 2025); evaluated U02 against `DBMS.pdf` and proposed realistic alternative.
-- [x] Run pilot dataset validator (`backend/scripts/rag_evaluation.py --pilot`): verified **0 errors and 15 draft warnings**.
+- [x] Evaluate and integrate unanswerable questions: replaced Q05 with Gemini API revenue on `10 RAG Architectures.pdf` and Q10 with MongoDB replica-set election rules on `DBMS.pdf`. Verified both unanswerable questions across complete document text with empty supporting spans and null expected answers.
+- [x] Create comprehensive human review sheet at `docs/EVALUATION_REVIEW.md` detailing all 15 questions with filenames, UUIDs, physical pages, reference answers, verbatim spans, indexed chunk IDs, answerability, and pending decision.
+- [x] Re-run pilot dataset validator (`backend/scripts/rag_evaluation.py --pilot`): verified **0 errors and 15 draft warnings**.
 - [x] Verify safety halt on unapproved pilot execution: verified runner strictly blocks execution (`ready_for_pilot_run: false`, `require_approved=True`) until human review and approval.
 - [x] Ensure all 107 existing backend tests continue to pass. Zero Gemini calls made; no RAG algorithms modified.
+
+## Phase 4E: final pilot evaluation and resume metrics
+
+- [x] Confirmed user review and approval of `docs/EVALUATION_REVIEW.md`; updated all 15 question records in `backend/evaluation/private/pilot-v1.json` to `reviewer_status: "approved"` and updated review sheet decision status to `APPROVED`.
+- [x] Executed pilot dataset validator: verified 0 errors, 0 warnings, `ready_for_pilot_run: true`.
+- [x] Executed official isolated retrieval evaluation runner (`backend/scripts/rag_evaluation.py --pilot --run-pilot`): completed cleanly with exit code 0 and generated JSON, CSV, and Markdown results in `backend/evaluation/results/pilot-v1/`.
+- [x] Extracted and verified empirical retrieval metrics across the 796-page, 3,449-chunk corpus:
+  - **Hit@5:** **84.62%** (11/13 eligible answerable questions)
+  - **Precision@5:** **20.00%** (0.2000)
+  - **Recall@5:** **66.67%** (0.6667)
+  - **MRR@10:** **0.7372**
+  - **nDCG@5:** **0.6586**
+  - **Mean retrieval query latency:** **64.37 ms** (Median: **60.15 ms**, Warm range: **46.60 – 66.02 ms**, Cold start: **144.64 ms**)
+  - **Total runner execution time:** **1,080.21 ms** (~1.08s across all 15 questions)
+- [x] Confirmed zero Gemini API calls and zero generation cost; answer generation intentionally disabled.
+- [x] Disaggregated performance across ingestion (73.20s total, 10.87 pages/sec), retrieval (64.37 ms average latency), and end-to-end response latency (generation unmeasured).
+- [x] Formulated final ATS-friendly resume bullets following Google's XYZ format ("Accomplished [X], measured by [Y], by doing [Z]") and generated standard LaTeX resume snippet in `docs/RESUME_FINAL.md`.
+- [x] Updated baseline and evaluation documentation in `docs/EVALUATION_BASELINE.md`, `docs/RAG_EVALUATION.md`, and `docs/PROJECT_PROGRESS.md`.
+- [x] Verified full backend test suite: **107 passed, 1 warning, 0 failures**. Displayed coverage remains **83%**. Phase 5 was not started.

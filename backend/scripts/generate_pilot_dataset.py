@@ -1,6 +1,7 @@
 """
-Generate backend/evaluation/private/pilot-v1.json with dual-verified spans
-matching both physical PDF pages and indexed ChromaDB chunks.
+Generate backend/evaluation/private/pilot-v1.json with:
+- 13 answerable questions (verified against pages and chunks)
+- 2 unanswerable questions (Q05 and Q10, verified across full document scopes)
 """
 import json
 import os
@@ -99,7 +100,7 @@ records = [
             {
                 "document_id": rag_uuid,
                 "page": 4,
-                "text": "Focuses on fixing bad retrievals.\u200b The system: ●\u200b detects irrelevant or low-quality documents ●\u200b filters or re-ranks them ●\u200b may re-query before answering"
+                "text": "Focuses on fixing bad retrievals.\u200b The system:\n●\u200b detects irrelevant or low-quality documents\n●\u200b filters or re-ranks them\n●\u200b may re-query before answering"
             }
         ],
         "category": "multi_step_reasoning",
@@ -110,29 +111,18 @@ records = [
     },
     {
         "question_id": "Q05",
-        "question": "What is the key difference between Cost-Constrained RAG and XAI RAG?",
+        "question": "What was Google's worldwide Gemini API revenue in 2025?",
         "document_scope_uuid": rag_uuid,
-        "expected_answer": "Cost-Constrained RAG optimizes tokens, API calls, latency, and model/retrieval expense; XAI RAG emphasizes explainable output with sources, reasoning traces, and evidence.",
-        "answerable": True,
-        "relevant_document_ids": [rag_uuid],
-        "relevant_page_numbers": [7],
-        "supporting_spans": [
-            {
-                "document_id": rag_uuid,
-                "page": 7,
-                "text": "Optimizes RAG pipelines under cost constraints (tokens, API calls, latency)."
-            },
-            {
-                "document_id": rag_uuid,
-                "page": 7,
-                "text": "Focuses on making RAG outputs explainable.\u200b The system: ●\u200b shows retrieved sources ●\u200b provides reasoning traces ●\u200b justifies answers with evidence"
-            }
-        ],
-        "category": "multi_step_reasoning",
+        "expected_answer": None,
+        "answerable": False,
+        "relevant_document_ids": [],
+        "relevant_page_numbers": [],
+        "supporting_spans": [],
+        "category": "unanswerable",
         "ocr_scanned": False,
         "mathematical": False,
         "reviewer_status": "draft",
-        "reviewer_notes": "Verified against 10 RAG Architectures.pdf page 7 and chunks 28 & 31; pending human review."
+        "reviewer_notes": "Verified unanswerable across complete document scope of 10 RAG Architectures.pdf (8 pages, 0 occurrences of Gemini/Google API revenue); expected behavior is abstention; pending human review."
     },
     {
         "question_id": "Q06",
@@ -235,24 +225,18 @@ records = [
     },
     {
         "question_id": "Q10",
-        "question": "What three conditions are listed for entity integrity constraints?",
+        "question": "What are the MongoDB replica-set election rules?",
         "document_scope_uuid": dbms_uuid,
-        "expected_answer": "Every relation has a primary key, each primary key is unique, and a primary key cannot be NULL.",
-        "answerable": True,
-        "relevant_document_ids": [dbms_uuid],
-        "relevant_page_numbers": [8],
-        "supporting_spans": [
-            {
-                "document_id": dbms_uuid,
-                "page": 8,
-                "text": "Every relation must have a primary key y Every primary key must be unique y A primary key should not be NULL"
-            }
-        ],
-        "category": "direct_factual",
+        "expected_answer": None,
+        "answerable": False,
+        "relevant_document_ids": [],
+        "relevant_page_numbers": [],
+        "supporting_spans": [],
+        "category": "unanswerable",
         "ocr_scanned": False,
         "mathematical": False,
         "reviewer_status": "draft",
-        "reviewer_notes": "Verified against DBMS.pdf page 8 and chunk 39; pending human review."
+        "reviewer_notes": "Verified unanswerable across complete document scope of DBMS.pdf (231 pages, covers only relational DBMS; 0 mentions of MongoDB or replica sets); expected behavior is abstention; pending human review."
     },
     {
         "question_id": "Q11",
