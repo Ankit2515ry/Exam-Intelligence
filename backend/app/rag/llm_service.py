@@ -44,6 +44,24 @@ from app.config.settings import (
 logger = logging.getLogger(__name__)
 
 
+class LLMProviderError(RuntimeError):
+    """Provider failure that must not be counted as a successful answer."""
+
+    def __init__(self, category: str):
+        super().__init__(f"LLM provider failure: {category}")
+        self.category = category
+
+
+def _provider_failure_category(exc: Exception) -> str:
+    name = type(exc).__name__.lower()
+    message = str(exc).lower()
+    if "timeout" in name or "timeout" in message:
+        return "timeout"
+    if "quota" in name or "quota" in message or "resourceexhausted" in name:
+        return "quota"
+    return "provider"
+
+
 # =========================================================
 # GEMINI CONFIGURATION
 # =========================================================
@@ -107,21 +125,18 @@ def generate_answer(
 
         # Safety check
         if not response.text:
-
-            return (
-                "Unable to generate response."
-            )
+            raise LLMProviderError("empty_response")
 
         return response.text
 
-    except Exception:
+    except LLMProviderError:
+        logger.exception("LLM provider returned no usable response")
+        raise
+    except Exception as exc:
 
         # print(
         #     "LLM Error"
         # )
         logger.exception("LLM answer generation failed")
 
-        return (
-            "An error occurred while "
-            "generating the response."
-        )
+        raise LLMProviderError(_provider_failure_category(exc)) from exc

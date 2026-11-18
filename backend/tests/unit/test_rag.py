@@ -61,12 +61,21 @@ def test_prompt_includes_context_and_general_knowledge_policy():
     assert "general knowledge" in prompt
 
 
-@pytest.mark.parametrize("result,expected", [
-    (SimpleNamespace(text="answer"), "answer"),
-    (SimpleNamespace(text=""), "Unable to generate response."),
-    (RuntimeError("synthetic failure"), "An error occurred while generating the response."),
+def test_llm_success_contract(monkeypatch):
+    from app.rag import llm_service
+    model = Mock()
+    model.generate_content.return_value = SimpleNamespace(text="answer")
+    monkeypatch.setattr(llm_service, "model", model)
+    assert llm_service.generate_answer("test prompt") == "answer"
+
+
+@pytest.mark.parametrize("result,category", [
+    (SimpleNamespace(text=""), "empty_response"),
+    (TimeoutError("provider timeout"), "timeout"),
+    (RuntimeError("quota exceeded"), "quota"),
+    (RuntimeError("provider unavailable"), "provider"),
 ])
-def test_llm_response_and_failure_contract(monkeypatch, result, expected):
+def test_llm_failures_are_classified(monkeypatch, result, category):
     from app.rag import llm_service
     model = Mock()
     if isinstance(result, Exception):
@@ -74,7 +83,9 @@ def test_llm_response_and_failure_contract(monkeypatch, result, expected):
     else:
         model.generate_content.return_value = result
     monkeypatch.setattr(llm_service, "model", model)
-    assert llm_service.generate_answer("test prompt") == expected
+    with pytest.raises(llm_service.LLMProviderError) as caught:
+        llm_service.generate_answer("test prompt")
+    assert caught.value.category == category
 
 
 def test_parser_extracts_generated_pdf_without_ocr(pdf_bytes, tmp_path, monkeypatch):

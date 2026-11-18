@@ -51,6 +51,9 @@ _start(patch.dict(os.environ, {
     "ALGORITHM": "HS256",
     "ACCESS_TOKEN_EXPIRE_MINUTES": "15",
     "GOOGLE_API_KEY": "test-key-no-network",
+    "PERFORMANCE_METRICS_ENABLED": "false",
+    "PERFORMANCE_PROVIDER_MODE": "mocked",
+    "PERFORMANCE_MEASUREMENT_CLASS": "synthetic",
 }))
 _start(patch("dotenv.load_dotenv", return_value=False))
 _start(patch("socket.create_connection", side_effect=RuntimeError("Network disabled in tests")))

@@ -38,6 +38,8 @@ from app.services.chat_service import (
 from app.auth.dependencies import get_current_user
 from app.db.crud.document import get_document_by_uuid
 from app.db.session import get_db
+from app.observability.performance import instrument_operation
+from app.rag.llm_service import LLMProviderError
 
 # =========================================================
 # ROUTER
@@ -59,6 +61,7 @@ router = APIRouter(
     "/chat",
     response_model=ChatResponse
 )
+@instrument_operation("chat")
 def chat(
     request: ChatRequest,
     current_user=Depends(get_current_user),
@@ -102,13 +105,16 @@ def chat(
                 detail="Access denied"
             )
 
-    response = chat_with_documents(
-
-        question=request.question,
-
-        user_id=current_user.id,
-
-        document_id=document_uuid
-    )
+    try:
+        response = chat_with_documents(
+            question=request.question,
+            user_id=current_user.id,
+            document_id=document_uuid
+        )
+    except LLMProviderError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="AI provider request failed",
+        ) from exc
 
     return response

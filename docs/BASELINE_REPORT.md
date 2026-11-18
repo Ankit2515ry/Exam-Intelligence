@@ -6,6 +6,25 @@ Machine-readable measurements represent the Phase 2C checkout in
 [baseline_results.json](baseline_results.json); the test
 design and limits remain in [TESTING_STRATEGY.md](TESTING_STRATEGY.md).
 
+## Phase 3 instrumentation results
+
+The authoritative run completed with **92 passed, 0 xfailed, 0 failed, 0 errors,
+and 1 warning in 27.26 seconds**. Coverage displays **83%**: 1,191 statements,
+999 covered lines, 192 missing lines, 208 branches, and 167 covered branches.
+Exact combined coverage is 83.35%; statement coverage is 83.88% and branch
+coverage is 80.29%.
+
+Frontend lint and build passed; Vite transformed 1,807 modules and built in 1.98s.
+The isolated synthetic measurement recorded one warm ingestion event at 58.189 ms
+and one warm chat event at 9.696 ms. The 948-byte text PDF retained one page and
+created three chunks; chat retrieved and returned three chunks. Providers were
+mocked and stores isolated. See [PERFORMANCE_BASELINE.md](PERFORMANCE_BASELINE.md)
+for stage timings and explicit NOT MEASURED items. These are not production claims.
+
+Telemetry is disabled by default, excludes raw content and identity, and cannot
+break requests if writing fails. Provider timeout, quota, and generic failures now
+return HTTP 502 rather than false HTTP 200 answers. Successful schemas are unchanged.
+
 ## Phase 2C results: cross-store consistency and deletion recovery
 
 The authoritative isolated run completed with **81 passed, 0 xfailed, 0 failed,
@@ -370,4 +389,5 @@ No route, API contract, user-facing feature, or RAG behavior was changed.
 4. Agree on a representative, permitted evaluation corpus and scoring protocol
    before changing chunking, retrieval, ranking, prompting, or model selection.
 
-Phase 2C stops here. Phase 3 has not been implemented.
+This sentence marked the historical Phase 2C checkpoint; Phase 3 instrumentation
+is now recorded at the top of this report.

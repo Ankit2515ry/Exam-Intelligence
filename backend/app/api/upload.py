@@ -71,6 +71,12 @@ from app.db.crud.document import (
 
     delete_document_record
 )
+from app.observability.performance import (
+    instrument_operation,
+    set_count,
+    set_value,
+    stage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,30 +159,29 @@ async def _stream_pdf_to_disk(
     """Stream at most the configured number of bytes to a staged file."""
     total_size = 0
 
-    with file_path.open("xb") as buffer:
-        while True:
-            remaining = MAX_PDF_UPLOAD_SIZE_BYTES - total_size
-            read_size = min(
-                UPLOAD_READ_CHUNK_SIZE,
-                remaining + 1
-            )
-            chunk = await file.read(read_size)
+    with stage("file_storage"):
+        with file_path.open("xb") as buffer:
+            while True:
+                remaining = MAX_PDF_UPLOAD_SIZE_BYTES - total_size
+                read_size = min(UPLOAD_READ_CHUNK_SIZE, remaining + 1)
+                chunk = await file.read(read_size)
 
-            if not chunk:
-                break
+                if not chunk:
+                    break
 
-            total_size += len(chunk)
+                total_size += len(chunk)
 
-            if total_size > MAX_PDF_UPLOAD_SIZE_BYTES:
-                raise HTTPException(
-                    status_code=413,
-                    detail=(
-                        "PDF exceeds the maximum upload size of "
-                        f"{MAX_PDF_UPLOAD_SIZE_BYTES} bytes"
+                if total_size > MAX_PDF_UPLOAD_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            "PDF exceeds the maximum upload size of "
+                            f"{MAX_PDF_UPLOAD_SIZE_BYTES} bytes"
+                        )
                     )
-                )
 
-            buffer.write(chunk)
+                buffer.write(chunk)
+    set_count("uploaded_bytes", total_size)
 
     if total_size == 0:
         raise HTTPException(
@@ -189,36 +194,28 @@ async def _stream_pdf_to_disk(
 
 def _validate_pdf_content(file_path: Path) -> None:
     """Confirm the staged bytes are a readable, non-encrypted PDF with pages."""
-    with file_path.open("rb") as stream:
-        if stream.read(5) != b"%PDF-":
-            raise HTTPException(
-                status_code=400,
-                detail="Uploaded content is not a PDF"
-            )
-
-    try:
-        with fitz.open(file_path) as document:
-            if document.needs_pass:
+    with stage("upload_validation"):
+        with file_path.open("rb") as stream:
+            if stream.read(5) != b"%PDF-":
                 raise HTTPException(
                     status_code=400,
-                    detail="Encrypted PDFs are not supported"
+                    detail="Uploaded content is not a PDF"
                 )
 
-            if document.page_count == 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail="PDF contains no pages"
-                )
+        try:
+            with fitz.open(file_path) as document:
+                if document.needs_pass:
+                    raise HTTPException(status_code=400, detail="Encrypted PDFs are not supported")
 
-            for page_number in range(document.page_count):
-                document.load_page(page_number)
-    except HTTPException:
-        raise
-    except (fitz.FileDataError, RuntimeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="PDF is malformed or corrupted"
-        ) from exc
+                if document.page_count == 0:
+                    raise HTTPException(status_code=400, detail="PDF contains no pages")
+
+                for page_number in range(document.page_count):
+                    document.load_page(page_number)
+        except HTTPException:
+            raise
+        except (fitz.FileDataError, RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="PDF is malformed or corrupted") from exc
 
 
 def _cleanup_staged_upload(
@@ -240,21 +237,26 @@ def _compensate_failed_ingestion(
     file_path: Path | None,
 ) -> None:
     """Best-effort compensation across stores; preserve the original exception."""
+    cleanup_failed = False
     try:
         db.rollback()
     except Exception:
+        cleanup_failed = True
         logger.exception("SQL rollback failed for document_uuid=%s", document_uuid)
 
     if document_uuid is not None:
         try:
             delete_document_chunks(document_uuid)
         except Exception:
+            cleanup_failed = True
             logger.exception("Vector compensation failed for document_uuid=%s", document_uuid)
 
     try:
         _cleanup_staged_upload(document_folder, file_path)
     except Exception:
+        cleanup_failed = True
         logger.exception("Filesystem compensation failed for document_uuid=%s", document_uuid)
+    set_value("cleanup_outcome", "partial_failure" if cleanup_failed else "success")
 
 
 # =========================================================
@@ -296,6 +298,7 @@ os.makedirs(
 # =========================================================
 
 @router.post("/upload")
+@instrument_operation("ingestion")
 async def upload_pdf(
 
     file: UploadFile = File(...),
@@ -318,19 +321,20 @@ async def upload_pdf(
     document = None
 
     try:
-        if file.content_type != "application/pdf":
-            logger.warning(
-                "Rejected upload with unsupported content type for user_id=%s",
-                current_user.id,
-            )
-            raise HTTPException(
-                status_code=400,
-                detail="Only PDF files are allowed"
-            )
+        with stage("upload_validation"):
+            if file.content_type != "application/pdf":
+                logger.warning(
+                    "Rejected upload with unsupported content type for user_id=%s",
+                    current_user.id,
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail="Only PDF files are allowed"
+                )
 
-        display_filename = _safe_display_filename(
-            file.filename
-        )
+            display_filename = _safe_display_filename(
+                file.filename
+            )
         document_uuid = str(uuid.uuid4())
         document_folder, file_path = _storage_paths(
             document_uuid
@@ -345,7 +349,8 @@ async def upload_pdf(
         # STORE DOCUMENT IN DATABASE
         # -----------------------------------------------------
 
-        document = create_document(
+        with stage("sql_persistence"):
+            document = create_document(
 
             db=db,
 
@@ -361,8 +366,8 @@ async def upload_pdf(
 
             document_uuid=document_uuid,
 
-            commit=False
-        )
+                commit=False
+            )
 
         # -----------------------------------------------------
         # INGEST DOCUMENT
@@ -374,8 +379,9 @@ async def upload_pdf(
             document_uuid=document.document_uuid,
             user_id=current_user.id,
         )
-        db.commit()
-        db.refresh(document)
+        with stage("sql_persistence"):
+            db.commit()
+            db.refresh(document)
     except HTTPException:
         _compensate_failed_ingestion(
             db=db,

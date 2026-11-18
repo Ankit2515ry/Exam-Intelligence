@@ -37,6 +37,7 @@ from PIL import Image
 
 from app.utils.helpers import clean_text
 from app.config.settings import TESSERACT_CMD
+from app.observability.performance import stage, set_value
 
 
 # =========================================================
@@ -138,9 +139,9 @@ class PDFParser:
             with io.BytesIO(image_bytes) as image_stream:
                 with Image.open(image_stream) as image:
                     try:
-                        ocr_text = pytesseract.image_to_string(
-                            image
-                        )
+                        set_value("ocr_used", True)
+                        with stage("ocr"):
+                            ocr_text = pytesseract.image_to_string(image)
                     except pytesseract.TesseractNotFoundError as exc:
                         page_label = (
                             f" on page {page_number}"

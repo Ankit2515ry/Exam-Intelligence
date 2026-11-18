@@ -46,6 +46,7 @@ from app.config.settings import (
     VECTOR_DB_DIR,
     COLLECTION_NAME
 )
+from app.observability.performance import stage, set_count
 
 
 # =========================================================
@@ -139,21 +140,17 @@ def store_chunks(
 
 
     # Batch embedding generation
-    embeddings = generate_embeddings(
-        texts
-    )
+    with stage("embedding_generation"):
+        embeddings = generate_embeddings(texts)
     # print(metadatas)
     # Store in ChromaDB
-    collection.add(
-
-        ids=ids,
-
-        embeddings=embeddings,
-
-        documents=documents,
-
-        metadatas=metadatas
-    )
+    with stage("chroma_storage"):
+        collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas
+        )
 
     # print("Stored Chroma IDs:", ids)
 
@@ -186,9 +183,8 @@ def search_chunks(
     ChromaDB query results
     """
 
-    query_embedding = generate_embedding(
-        query
-    )
+    with stage("query_embedding"):
+        query_embedding = generate_embedding(query)
 
     where = {
         "user_id": int(user_id)
@@ -202,11 +198,13 @@ def search_chunks(
             ]
         }
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k,
-        where=where
-    )
+    with stage("vector_search"):
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+            where=where
+        )
+    set_count("retrieved_candidates", len(results.get("ids", [[]])[0]))
 
     # print("\nQUERY RESULTS:")
     # print(results)

@@ -1,4 +1,8 @@
 from statistics import mean
+import json
+import platform
+import subprocess
+import sys
 
 import pytest
 
@@ -113,3 +117,56 @@ def test_ingestion_failure_artifact_baseline(stage, auth_client, db, isolated_ru
     record_baseline(f"ingestion_failure_{stage}", {"http_status": response.status_code, **artifacts})
     assert response.status_code == 500
     assert not any(artifacts.values())
+
+
+def test_synthetic_instrumentation_baseline(
+    auth_client, user, isolated_runtime, pdf_bytes, monkeypatch, tmp_path, record_baseline
+):
+    from app.config import settings
+
+    metrics_path = tmp_path / "synthetic-performance.jsonl"
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False,
+    ).stdout.strip() or None
+    monkeypatch.setattr(settings, "PERFORMANCE_METRICS_ENABLED", True)
+    monkeypatch.setattr(settings, "PERFORMANCE_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(settings, "PERFORMANCE_PROVIDER_MODE", "mocked")
+    monkeypatch.setattr(settings, "PERFORMANCE_MEASUREMENT_CLASS", "synthetic")
+    monkeypatch.setattr(settings, "PERFORMANCE_RUN_TEMPERATURE", "warm")
+    if revision:
+        monkeypatch.setenv("GIT_COMMIT_SHA", revision)
+
+    upload = auth_client.post(
+        "/api/upload", files={"file": ("synthetic.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert upload.status_code == 200
+    document_uuid = upload.json()["document"]["document_uuid"]
+    chat = auth_client.post("/api/chat", json={
+        "question": "Explain normalization", "document_id": document_uuid,
+    })
+    assert chat.status_code == 200
+
+    events = [json.loads(line) for line in metrics_path.read_text(encoding="utf-8").splitlines()]
+    assert [event["operation"] for event in events] == ["ingestion", "chat"]
+    assert all(event["success"] is True for event in events)
+    assert all(event["provider_mode"] == "mocked" for event in events)
+    assert all(event["total_duration_ms"] > 0 for event in events)
+    record_baseline("performance_synthetic", {
+        "scope": "Deterministic isolated test environment; mocked embedding, reranker, and Gemini providers",
+        "operating_system": platform.platform(),
+        "python": sys.version.split()[0],
+        "code_revision": revision,
+        "sample_count": len(events),
+        "fixture_pdf_bytes": len(pdf_bytes),
+        "events": [{
+            "operation": event["operation"],
+            "total_duration_ms": event["total_duration_ms"],
+            "durations_ms": event["durations_ms"],
+            "counts": event["counts"],
+            "success": event["success"],
+            "provider_mode": event["provider_mode"],
+            "measurement_class": event["measurement_class"],
+            "run_temperature": event["run_temperature"],
+        } for event in events],
+        "error_count": 0,
+    })

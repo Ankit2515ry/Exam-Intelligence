@@ -1,6 +1,6 @@
 # Exam Intelligence: current low-level design
 
-Status: Phase 2C, 2026-11-18. Current behavior is authoritative here; desirable
+Status: Phase 3, 2026-11-18. Current behavior is authoritative here; desirable
 changes are listed separately at the end. Paths below are relative to the repo.
 
 ## Assembly and module responsibilities
@@ -32,7 +32,9 @@ changes are listed separately at the end. Paths below are relative to the repo.
 | `app/rag/bm25.py`, `hybrid_search.py` | Candidate keyword scores and weighted fusion |
 | `app/rag/reranker.py` | Cross-encoder pair scoring and descending sort |
 | `app/rag/prompt_builder.py` | Document-first prompt with general-knowledge fallback instructions |
-| `app/rag/llm_service.py` | Gemini call, text extraction, generic failure response |
+| `app/rag/llm_service.py` | Gemini call, text extraction, typed provider failures |
+| `app/observability/performance.py` | Request-scoped timers and best-effort rotating JSONL writer |
+| `backend/scripts/performance_metrics.py` | Offline validation, CSV export, grouped statistics and Markdown report |
 | `app/utils/helpers.py` | Whitespace, page-label, repeated-dot cleaning |
 
 Frontend startup is `index.html -> src/main.jsx -> App.jsx`. `App.jsx` maps `/`
@@ -58,7 +60,7 @@ Protected routes require `Authorization: Bearer <JWT>`.
 | GET `/api/chunks/{document_uuid}` | UUID path parameter | Raw Chroma get result with parallel IDs/documents/metadatas arrays; 404 missing record, 403 non-owner |
 | GET `/api/chunk/{chunk_id}` | Chunk ID | `{chunk_id, text, metadata}`; 403 wrong owner; 404 missing chunk |
 | DELETE `/api/delete/{document_uuid}` | UUID path parameter | Existing `{message, document_uuid}`; 404 missing, 403 non-owner, 500 incomplete cleanup/recovery required |
-| POST `/api/chat` | JSON described below | `ChatResponse`; 401 no/invalid authentication, 422 missing required question, unhandled pipeline exceptions become 500 |
+| POST `/api/chat` | JSON described below | `ChatResponse`; 401 authentication, 422 invalid body, 502 Gemini/provider failure |
 
 The authentication prefix is doubled because both its APIRouter and
 `main.include_router` add `/auth`. OAuth's token URL matches `auth/auth/login`.
@@ -317,3 +319,24 @@ For an orphan `.<UUID>.deleting` folder, first confirm the SQL document is absen
 and Chroma has no vectors for that UUID, then remove only that exact staging folder.
 If SQL still exists after a pre-commit compensation failure, restore/rename the
 folder if needed, run the audit, correct the failing dependency, and retry deletion.
+
+## Phase 3 performance boundaries
+
+`/api/chat` and `/api/upload` use request-scoped instrumentation decorators. Each
+generates a private ID and UTC timestamp, establishes a context-local event,
+measures total route duration, classifies exceptions, and attempts one JSONL write
+in `finally`. Lower-level functions contribute exclusive stage durations without
+changing API response models or their public call signatures.
+
+Chat stages are query embedding, Chroma query, BM25, hybrid fusion, reranking,
+prompt construction, and Gemini. Ingestion stages are stream storage, PDF
+validation, parsing excluding OCR, OCR, chunking, batch embedding, Chroma add,
+and accumulated SQL flush/commit. Nonexecuted stages remain null. Complete schema,
+privacy exclusions, formulas, and concurrency limits are documented in
+[PERFORMANCE_METRICS.md](PERFORMANCE_METRICS.md).
+
+Gemini exceptions previously became generic strings inside HTTP 200 responses.
+`LLMProviderError` now classifies timeout, quota, empty-response, and other provider
+failures; the chat route returns HTTP 502 with `{detail: "AI provider request failed"}`.
+Successful `ChatResponse` bodies remain unchanged. This correction prevents
+provider outages from being measured as successful answers.

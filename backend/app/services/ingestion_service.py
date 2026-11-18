@@ -52,6 +52,7 @@ from app.db.crud.chunk import (
 )
 
 logger = logging.getLogger(__name__)
+from app.observability.performance import current_event, stage, set_count, set_value
 
 # =========================================================
 # INGEST DOCUMENT
@@ -107,20 +108,28 @@ def ingest_document(
 
     parser = PDFParser(file_path)
 
-    parsed_pages = parser.parse()
+    set_value("ocr_used", False)
+    with stage("pdf_parsing"):
+        parsed_pages = parser.parse()
+    event = current_event()
+    if event is not None and event["durations_ms"]["ocr"] is not None:
+        event["durations_ms"]["pdf_parsing"] = max(
+            0.0,
+            event["durations_ms"]["pdf_parsing"] - event["durations_ms"]["ocr"],
+        )
+    set_count("retained_pages", len(parsed_pages))
 
     # =====================================================
     # CREATE CHUNKS
     # =====================================================
 
-    chunks = create_chunks(
- 
-        pages=parsed_pages,
-
-        document_id=document_uuid,
-
-        user_id=user_id
-    )
+    with stage("chunking"):
+        chunks = create_chunks(
+            pages=parsed_pages,
+            document_id=document_uuid,
+            user_id=user_id
+        )
+    set_count("chunks", len(chunks))
     logger.debug(
         "Created document chunks document_uuid=%s count=%s",
         document_uuid,
@@ -142,11 +151,12 @@ def ingest_document(
     # STORE CHUNK METADATA IN POSTGRESQL
     # =====================================================
 
-    for index, chunk in enumerate(chunks):
+    with stage("sql_persistence"):
+        for index, chunk in enumerate(chunks):
 
-        metadata = chunk["metadata"]
+            metadata = chunk["metadata"]
 
-        create_chunk(
+            create_chunk(
 
             db=db,
 
@@ -165,8 +175,8 @@ def ingest_document(
 
             chunk_metadata=metadata,
 
-            commit=False
-        )
+                commit=False
+            )
     # =====================================================
     # RETURN INGESTION RESULT
     # =====================================================

@@ -165,5 +165,23 @@ RAG algorithm, frontend source, or production data was changed.
 - [ ] Agree on a representative evaluation corpus and real-model measurement protocol.
 - [ ] Consider ranking/chunking/prompt changes only after obtaining that quality baseline.
 
-No Phase 3 work, schema migration, legacy repair, ranking change, new user-facing
-functionality, production operation, or deployment is included. Work stops here.
+At the Phase 2C checkpoint, no Phase 3 work, schema migration, legacy repair,
+ranking change, production operation, or deployment had been included.
+
+## Phase 3: performance instrumentation and measurement infrastructure
+
+- [x] Time seven chat stages, eight ingestion stages, and both total route durations.
+- [x] Record private IDs, UTC timestamps, safe counts, status, failure classification,
+  model names, provider class, optional cold/warm label, and available revision.
+- [x] Keep skipped stages null and finalize timers on exception paths.
+- [x] Add disabled-by-default rotating JSONL output with a process-local lock.
+- [x] Add validation, malformed-line reporting, CSV export, grouped statistics,
+  throughput calculations, and Markdown output.
+- [x] Return HTTP 502 for Gemini/provider failures instead of a false successful answer.
+- [x] Test timeout, quota, provider, privacy, writer-failure, percentile, empty-data,
+  throughput, grouping, and all prior regression behavior.
+- [x] Capture an isolated two-event synthetic baseline with mocked providers.
+
+Final verification: **92 passed, 0 xfailed, 0 failed, 0 errors, and 1 warning**.
+Displayed coverage is **83%**. Frontend lint and production build pass. No retrieval
+optimization, external monitoring, cache, worker, dashboard, or Phase 4 work was added.

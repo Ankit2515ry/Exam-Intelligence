@@ -145,3 +145,24 @@ BM25_WEIGHT = 0.3
 # =========================================================
 
 DEBUG = True
+
+# =========================================================
+# PERFORMANCE TELEMETRY
+# =========================================================
+
+PERFORMANCE_METRICS_ENABLED = os.getenv(
+    "PERFORMANCE_METRICS_ENABLED", "false"
+).lower() in {"1", "true", "yes", "on"}
+PERFORMANCE_METRICS_PATH = os.getenv(
+    "PERFORMANCE_METRICS_PATH", "metrics/performance.jsonl"
+)
+PERFORMANCE_METRICS_MAX_BYTES = int(os.getenv(
+    "PERFORMANCE_METRICS_MAX_BYTES", str(5 * 1024 * 1024)
+))
+PERFORMANCE_METRICS_BACKUPS = int(os.getenv("PERFORMANCE_METRICS_BACKUPS", "3"))
+PERFORMANCE_PROVIDER_MODE = os.getenv("PERFORMANCE_PROVIDER_MODE", "real")
+PERFORMANCE_MEASUREMENT_CLASS = os.getenv("PERFORMANCE_MEASUREMENT_CLASS", "unclassified")
+PERFORMANCE_RUN_TEMPERATURE = os.getenv("PERFORMANCE_RUN_TEMPERATURE") or None
+
+if PERFORMANCE_METRICS_MAX_BYTES <= 0 or PERFORMANCE_METRICS_BACKUPS < 0:
+    raise ValueError("Performance metric retention settings are invalid")

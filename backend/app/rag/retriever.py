@@ -53,6 +53,7 @@ from app.rag.hybrid_search import (
 from app.config.settings import (
     TOP_K
 )
+from app.observability.performance import stage
 
 
 # =========================================================
@@ -176,20 +177,18 @@ def retrieve_relevant_chunks(
     # STEP 4 — BM25 KEYWORD SCORING
     # =====================================================
 
-    retrieved_chunks = bm25_search(
-
-        query=question,
-
-        chunks=retrieved_chunks
-    )
+    with stage("bm25"):
+        retrieved_chunks = bm25_search(
+            query=question,
+            chunks=retrieved_chunks
+        )
 
     # =====================================================
     # STEP 5 — HYBRID SCORE FUSION
     # =====================================================
 
-    retrieved_chunks = combine_scores(
-        retrieved_chunks
-    )
+    with stage("hybrid_fusion"):
+        retrieved_chunks = combine_scores(retrieved_chunks)
 
     # =====================================================
     # FINAL HYBRID RANKED CHUNKS

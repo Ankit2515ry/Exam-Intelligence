@@ -54,6 +54,7 @@ from app.rag.llm_service import (
 from app.config.settings import (
     RERANK_TOP_K
 )
+from app.observability.performance import stage, set_count
 
 logger = logging.getLogger(__name__)
 
@@ -129,15 +130,15 @@ def chat_with_documents(
     # STEP 2 — RERANK CHUNKS
     # =====================================================
 
-    reranked_chunks = rerank(
-
-        question=question,
-
-        chunks=retrieved_chunks
-    )
+    with stage("reranking"):
+        reranked_chunks = rerank(
+            question=question,
+            chunks=retrieved_chunks
+        )
 
     # Keep best chunks after reranking
     final_chunks = reranked_chunks[:5]
+    set_count("final_source_chunks", len(final_chunks))
     logger.info(
         "Selected chunks for chat user_id=%s count=%s",
         user_id,
@@ -160,12 +161,11 @@ def chat_with_documents(
     # STEP 3 — BUILD PROMPT
     # =====================================================
 
-    prompt = build_prompt(
-
-        question=question,
-
-        retrieved_chunks=final_chunks
-    )
+    with stage("prompt_construction"):
+        prompt = build_prompt(
+            question=question,
+            retrieved_chunks=final_chunks
+        )
 
     # print("\n" + "="*80)
     # print("PROMPT SENT TO LLM")
@@ -177,9 +177,8 @@ def chat_with_documents(
     # STEP 4 — GENERATE ANSWER
     # =====================================================
 
-    answer = generate_answer(
-        prompt
-    )
+    with stage("gemini_api"):
+        answer = generate_answer(prompt)
     logger.info(
         "Generated chat answer user_id=%s source_count=%s",
         user_id,
