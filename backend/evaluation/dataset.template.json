@@ -1,0 +1,11 @@
+{
+  "dataset_version": "replace-with-approved-version",
+  "category_targets": {
+    "direct_factual": 45,
+    "paraphrased_semantic": 20,
+    "multi_step_reasoning": 10,
+    "unanswerable": 15,
+    "cross_document_isolation": 10
+  },
+  "records": []
+}

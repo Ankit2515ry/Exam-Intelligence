@@ -116,6 +116,9 @@ dist/
 .coverage.*
 /tests/artifacts/
 coverage/
+/evaluation/corpus/
+/evaluation/private/
+/evaluation/results/
 
 
 

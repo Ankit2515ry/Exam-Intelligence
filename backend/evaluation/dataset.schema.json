@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Exam Intelligence gold evaluation dataset",
+  "type": "object",
+  "required": ["dataset_version", "records"],
+  "properties": {
+    "dataset_version": {"type": "string", "minLength": 1},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question_id", "question", "document_scope_uuid", "expected_answer",
+          "answerable", "relevant_document_ids", "relevant_page_numbers",
+          "supporting_spans", "category", "ocr_scanned", "mathematical",
+          "reviewer_status", "reviewer_notes"
+        ],
+        "properties": {
+          "question_id": {"type": "string", "minLength": 1},
+          "question": {"type": "string", "minLength": 1},
+          "document_scope_uuid": {"type": ["string", "null"]},
+          "expected_answer": {"type": ["string", "null"]},
+          "answerable": {"type": "boolean"},
+          "relevant_document_ids": {"type": "array", "items": {"type": "string"}},
+          "relevant_page_numbers": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+          "supporting_spans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["document_id", "page", "text"],
+              "properties": {
+                "document_id": {"type": "string"},
+                "page": {"type": "integer", "minimum": 1},
+                "text": {"type": "string", "minLength": 1},
+                "relevance_grade": {"type": "number", "minimum": 0}
+              }
+            }
+          },
+          "category": {"enum": ["direct_factual", "paraphrased_semantic", "multi_step_reasoning", "unanswerable", "cross_document_isolation"]},
+          "ocr_scanned": {"type": "boolean"},
+          "mathematical": {"type": "boolean"},
+          "reviewer_status": {"enum": ["draft", "in_review", "approved", "rejected"]},
+          "reviewer_notes": {"type": "string"}
+        }
+      }
+    }
+  }
+}

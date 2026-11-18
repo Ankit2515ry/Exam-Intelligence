@@ -6,6 +6,30 @@ Machine-readable measurements represent the Phase 2C checkout in
 [baseline_results.json](baseline_results.json); the test
 design and limits remain in [TESTING_STRATEGY.md](TESTING_STRATEGY.md).
 
+## Phase 4 evaluation-framework results
+
+The authoritative isolated run completed with **101 passed, 0 xfailed, 0 failed,
+0 errors, and 1 warning in 46.29 seconds**. Coverage displays **83%**: 1,471
+statements, 1,239 covered lines, 232 missing lines, 334 branches, and 262 covered
+branches. Exact combined coverage is 83.16%; statement coverage is 84.23% and
+branch coverage is 78.44%.
+
+Frontend lint and production build passed. Vite transformed 1,807 modules and
+completed in 1.85 seconds. No frontend source changed.
+
+The only quality measurement is a deterministic synthetic framework fixture with
+three records. Two answerable records deliberately receive their one labeled
+passage, producing Hit@5 1.00, Precision@5 0.20, Recall@5 1.00, MRR@10 1.00,
+and nDCG@5 1.00; the unanswerable record is excluded from retrieval averages.
+Generation was disabled, so factual correctness, faithfulness, citation support,
+and abstention are NOT MEASURED. These synthetic values verify formulas and wiring
+only and are not application accuracy.
+
+Genuine RAG measurements remain **NOT MEASURED** because no approved PDF corpus,
+100-question human-reviewed dataset, reference answers, or supporting-span labels
+were supplied. No Gemini or evaluator call was made. See
+[EVALUATION_BASELINE.md](EVALUATION_BASELINE.md).
+
 ## Phase 3 instrumentation results
 
 The authoritative run completed with **92 passed, 0 xfailed, 0 failed, 0 errors,

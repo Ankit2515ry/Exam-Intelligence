@@ -185,3 +185,43 @@ ranking change, production operation, or deployment had been included.
 Final verification: **92 passed, 0 xfailed, 0 failed, 0 errors, and 1 warning**.
 Displayed coverage is **83%**. Frontend lint and production build pass. No retrieval
 optimization, external monitoring, cache, worker, dashboard, or Phase 4 work was added.
+
+## Phase 4: gold dataset and objective RAG evaluation
+
+- [x] Define a strict 100-question schema and empty, non-fabricated template.
+- [x] Validate labels, approval state, duplicate IDs, and near-duplicate questions.
+- [x] Enforce the 45/20/10/15/10 category allocation for final splitting.
+- [x] Create deterministic 20/30/50 splits with seeds, IDs, hashes, and leakage reporting.
+- [x] Implement Hit@5, Precision@5, Recall@5, MRR@10, and graded nDCG@5.
+- [x] Use document/page/supporting-span relevance rather than chunk IDs as ground truth.
+- [x] Add citation existence, metadata, scope, and cross-user validity checks.
+- [x] Add abstention metrics and separate human correctness/faithfulness/support fields.
+- [x] Reuse production retrieval and reranking in an offline runner.
+- [x] Keep answer generation explicitly disabled unless requested.
+- [x] Emit JSON, CSV, Markdown, run metadata, errors, exclusions, and latency.
+- [x] Add synthetic-only framework tests and baseline evidence.
+
+Genuine RAG accuracy remains **NOT MEASURED** because no approved PDFs or human
+labels were provided. No RAG parameter, HTTP contract, frontend code, or Phase 5
+functionality was changed.
+
+Final Phase 4 verification: **101 passed, 0 xfailed, 0 failed, 0 errors, and
+1 warning**. Displayed coverage is **83%**. Frontend lint and production build pass.
+
+## Phase 4B: real-corpus and pilot preparation
+
+- [x] Add a read-only PDF inventory with filename, SHA-256, bytes, and page count.
+- [x] Add duplicate-file detection before isolated indexing.
+- [x] Add an empty 10–15 record pilot template; no answers were fabricated.
+- [x] Add pilot validation without weakening final 100-question/quota rules.
+- [x] Validate manifest UUIDs, page bounds, supporting passages, scope, and approvals.
+- [x] Add retrieval-only pilot execution and explicitly reject Gemini generation.
+- [x] Group overlapping documents and repeated exact passages to reduce split leakage.
+- [x] Document isolated upload/UUID/page verification and exact PowerShell commands.
+
+No real PDFs or labels were present, so the pilot was not executed and genuine
+quality remains NOT MEASURED. Phase 5 was not started.
+
+Final Phase 4B verification: **104 passed, 0 xfailed, 0 failed, 0 errors, and
+1 warning**. Displayed coverage remains **83%**. Frontend lint and production
+build pass; no frontend source changed.

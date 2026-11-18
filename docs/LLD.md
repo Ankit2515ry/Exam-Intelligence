@@ -1,6 +1,6 @@
 # Exam Intelligence: current low-level design
 
-Status: Phase 3, 2026-11-18. Current behavior is authoritative here; desirable
+Status: Phase 4, 2026-11-18. Current behavior is authoritative here; desirable
 changes are listed separately at the end. Paths below are relative to the repo.
 
 ## Assembly and module responsibilities
@@ -35,6 +35,10 @@ changes are listed separately at the end. Paths below are relative to the repo.
 | `app/rag/llm_service.py` | Gemini call, text extraction, typed provider failures |
 | `app/observability/performance.py` | Request-scoped timers and best-effort rotating JSONL writer |
 | `backend/scripts/performance_metrics.py` | Offline validation, CSV export, grouped statistics and Markdown report |
+| `app/evaluation/dataset.py` | Gold-record validation, hashing and deterministic leakage-aware splitting |
+| `app/evaluation/metrics.py` | Retrieval, citation, abstention and human-score aggregation formulas |
+| `app/evaluation/runner.py` | Offline production-pipeline execution and JSON/CSV/Markdown results |
+| `backend/scripts/rag_evaluation.py` | Dataset validation, splitting, corpus hashing and evaluation CLI |
 | `app/utils/helpers.py` | Whitespace, page-label, repeated-dot cleaning |
 
 Frontend startup is `index.html -> src/main.jsx -> App.jsx`. `App.jsx` maps `/`
@@ -340,3 +344,23 @@ Gemini exceptions previously became generic strings inside HTTP 200 responses.
 failures; the chat route returns HTTP 502 with `{detail: "AI provider request failed"}`.
 Successful `ChatResponse` bodies remain unchanged. This correction prevents
 provider outages from being measured as successful answers.
+
+## Phase 4 offline evaluation flow
+
+The CLI loads a private versioned JSON dataset, validates labels, and deterministically
+splits exactly 100 approved records into development, validation, and held-out sets.
+It records dataset/split/corpus hashes and attempts to keep document groups within
+one split. Any capacity-forced document leakage is explicit metadata.
+
+For each selected record, the runner calls the production retriever with the labeled
+document scope and isolated evaluation user, then calls the production reranker and
+keeps five. Label-based metrics compare returned document/page/content against
+supporting spans. It validates each returned chunk through the active Chroma lookup,
+including document/page/scope/user metadata. Answer generation calls the existing
+chat service only when explicitly enabled; otherwise answer and human metrics remain
+null. No HTTP application route imports or invokes this evaluation runner.
+
+Outputs include ranked per-question evidence and aggregate JSON, flattened CSV, and
+Markdown. Run metadata captures Git SHA, dataset/corpus hashes, models, chunking,
+candidate/final counts, fusion weights, latency, errors, and exclusions. The held-out
+split is documented as prohibited for parameter tuning.

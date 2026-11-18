@@ -3,6 +3,7 @@ import json
 import platform
 import subprocess
 import sys
+from langchain_core.documents import Document
 
 import pytest
 
@@ -170,3 +171,72 @@ def test_synthetic_instrumentation_baseline(
         } for event in events],
         "error_count": 0,
     })
+
+
+def test_synthetic_rag_quality_framework_baseline(record_baseline):
+    from app.evaluation.runner import run_evaluation
+
+    def make_record(question_id, document_id, page, answerable=True):
+        return {
+            "question_id": question_id,
+            "question": f"Synthetic framework question {question_id} with unique evidence token",
+            "document_scope_uuid": document_id,
+            "expected_answer": "Synthetic reference" if answerable else None,
+            "answerable": answerable,
+            "relevant_document_ids": [document_id] if answerable else [],
+            "relevant_page_numbers": [page] if answerable else [],
+            "supporting_spans": [{"document_id": document_id, "page": page, "text": f"evidence {question_id}"}] if answerable else [],
+            "category": "direct_factual" if answerable else "unanswerable",
+            "ocr_scanned": False,
+            "mathematical": False,
+            "reviewer_status": "approved",
+            "reviewer_notes": "Synthetic framework test only",
+        }
+
+    records = [
+        make_record("synthetic-alpha-19f4", "doc-a", 1),
+        make_record("synthetic-beta-83d2", "doc-b", 2),
+        make_record("synthetic-unanswerable-5ac7", "doc-c", 1, answerable=False),
+    ]
+
+    def retrieve(question, user_id, top_k, document_id):
+        question_id = next(record["question_id"] for record in records if record["question"] == question)
+        if "unanswerable" in question_id:
+            return []
+        record = next(record for record in records if record["question_id"] == question_id)
+        return [Document(
+            page_content=f"evidence {question_id}",
+            metadata={"chunk_id": f"chunk-{question_id}", "document_id": record["document_scope_uuid"], "page": record["relevant_page_numbers"][0], "user_id": user_id},
+        )]
+
+    chunks = {}
+    for record in records[:2]:
+        chunks[f"chunk-{record['question_id']}"] = {"metadata": {
+            "document_id": record["document_scope_uuid"],
+            "page": record["relevant_page_numbers"][0],
+            "user_id": 7,
+        }}
+    run = run_evaluation(
+        records, split_name="synthetic", dataset_version="synthetic-framework-v1",
+        corpus_hash="synthetic-corpus", user_id=7, retrieve_fn=retrieve,
+        rerank_fn=lambda **kwargs: kwargs["chunks"], lookup_fn=chunks.get,
+    )
+    record_baseline("rag_quality_synthetic", {
+        "scope": "Framework verification only; deterministic synthetic labels and retrieval, no real model accuracy",
+        "sample_count": run["sample_count"],
+        "retrieval_metrics": run["retrieval_metrics"],
+        "answer_quality": run["answer_quality"],
+        "abstention": run["abstention"],
+        "errors": len(run["errors"]),
+    })
+    assert run["retrieval_metrics"] == {
+        "eligible_questions": 2,
+        "excluded_no_relevance_labels": 1,
+        "hit_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "mrr_at_10": 1.0,
+        "ndcg_at_5": 1.0,
+    }
+    assert run["answer_quality"]["factual_correctness"]["mean"] is None
+    assert run["abstention"]["eligible"] == 0

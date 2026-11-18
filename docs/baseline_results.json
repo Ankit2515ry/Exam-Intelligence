@@ -16,7 +16,7 @@
   },
   "exit_status": 0,
   "test_outcomes": {
-    "passed": 92,
+    "passed": 104,
     "failed": 0,
     "error": 0,
     "xfailed": 0,
@@ -102,22 +102,22 @@
       "scope": "Deterministic isolated test environment; mocked embedding, reranker, and Gemini providers",
       "operating_system": "Windows-10-10.0.26300-SP0",
       "python": "3.11.9",
-      "code_revision": "3baf6f57e612b1bfd42799e0c88cb003e1348415",
+      "code_revision": "4e3829bf15c78bdc073d7b75b52ab899d80a412c",
       "sample_count": 2,
       "fixture_pdf_bytes": 948,
       "events": [
         {
           "operation": "ingestion",
-          "total_duration_ms": 58.189100003801286,
+          "total_duration_ms": 62.45059997308999,
           "durations_ms": {
-            "chroma_storage": 7.671499974094331,
-            "chunking": 0.2620000159367919,
-            "embedding_generation": 0.1846000086516142,
-            "file_storage": 1.0097000049427152,
+            "chroma_storage": 8.86900001205504,
+            "chunking": 0.2722999779507518,
+            "embedding_generation": 0.2107000327669084,
+            "file_storage": 1.3805999769829214,
             "ocr": null,
-            "pdf_parsing": 4.414499970152974,
-            "sql_persistence": 23.201200063340366,
-            "upload_validation": 17.459599999710917
+            "pdf_parsing": 4.650900023989379,
+            "sql_persistence": 24.371200008317828,
+            "upload_validation": 18.343000032473356
           },
           "counts": {
             "chunks": 3,
@@ -131,15 +131,15 @@
         },
         {
           "operation": "chat",
-          "total_duration_ms": 9.696200024336576,
+          "total_duration_ms": 10.880700021516532,
           "durations_ms": {
-            "bm25": 0.3157999599352479,
-            "gemini_api": 0.014000048395246267,
-            "hybrid_fusion": 0.07259997073560953,
-            "prompt_construction": 0.021199986804276705,
-            "query_embedding": 0.12659997446462512,
-            "reranking": 0.047900015488266945,
-            "vector_search": 4.539099987596273
+            "bm25": 0.5186000489629805,
+            "gemini_api": 0.022799998987466097,
+            "hybrid_fusion": 0.069500005338341,
+            "prompt_construction": 0.035400036722421646,
+            "query_embedding": 0.2031000331044197,
+            "reranking": 0.05479995161294937,
+            "vector_search": 4.749300016555935
           },
           "counts": {
             "final_source_chunks": 3,
@@ -152,6 +152,40 @@
         }
       ],
       "error_count": 0
+    },
+    "rag_quality_synthetic": {
+      "scope": "Framework verification only; deterministic synthetic labels and retrieval, no real model accuracy",
+      "sample_count": 3,
+      "retrieval_metrics": {
+        "eligible_questions": 2,
+        "excluded_no_relevance_labels": 1,
+        "hit_at_5": 1.0,
+        "precision_at_5": 0.2,
+        "recall_at_5": 1.0,
+        "mrr_at_10": 1.0,
+        "ndcg_at_5": 1.0
+      },
+      "answer_quality": {
+        "factual_correctness": {
+          "reviewed": 0,
+          "mean": null
+        },
+        "faithfulness": {
+          "reviewed": 0,
+          "mean": null
+        },
+        "citation_support": {
+          "reviewed": 0,
+          "mean": null
+        }
+      },
+      "abstention": {
+        "eligible": 0,
+        "correct_abstentions": 0,
+        "false_abstentions": 0,
+        "missed_abstentions": 0
+      },
+      "errors": 0
     }
   }
 }
