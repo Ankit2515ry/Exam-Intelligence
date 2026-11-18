@@ -1,11 +1,20 @@
 # Phase 4 evaluation baseline
 
+## Phase 4C Step 2 indexing status
+
+- **Selected Corpus:** 10 PDFs, 796 physical pages, ~76.79 MiB.
+- **Indexed Corpus:** Exactly 10 PDFs indexed and verified (796 physical pages, 796 retained pages, 3,449 chunks).
+- **Pending Corpus:** 0 PDFs, 0 physical pages.
+- **Cross-Store Consistency:** 3,449 SQL chunks in `exam_intelligence_evaluation` == 3,449 ChromaDB vectors in `chroma-corpus-v1` (100% ID set equality).
+- **Pilot/Gold Questions:** 0 labeled.
+
 ## Genuine RAG quality
 
-**NOT MEASURED.** No approved PDFs, human reference answers, relevant passages,
-or 100-question reviewed dataset were provided. No real Gemini or paid evaluator
-call was made. Therefore this phase reports no genuine Hit@5, precision, recall,
-MRR, nDCG, correctness, faithfulness, citation-support, or abstention percentage.
+**NOT MEASURED.** No human reference answers, relevant passages,
+or 100-question reviewed dataset have yet been evaluated against the indexed PDF.
+No real Gemini or paid evaluator call was made. Therefore this phase reports no
+genuine Hit@5, precision, recall, MRR, nDCG, correctness, faithfulness,
+citation-support, or abstention percentage.
 
 ## Synthetic framework verification
 

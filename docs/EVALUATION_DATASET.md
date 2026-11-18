@@ -165,12 +165,16 @@ $envFile = (Resolve-Path evaluation\private\evaluation-corpus-v1.env).Path
   --evaluation-env $envFile --mode full --verify-regular-env .env --require-ready
 ```
 
-Infrastructure mode is safe before schema/account bootstrap. Full mode additionally
-requires the dedicated evaluation account, schema, zero owned documents, nondefault
-Chroma/uploads, and absence of that account from the regular database. It exits
-nonzero if any check fails. Set `EVALUATION_ENV_FILE` to this private file before
-launching the backend; the application loader uses it with override precedence and
-requires the evaluation-mode marker, preventing regular `.env` resource fallback.
+Infrastructure mode is safe before schema/account bootstrap. Bootstrap mode
+(`--mode bootstrap` or `--require-empty`) additionally requires zero owned
+documents for clean-state provisioning verification. Full mode (`--mode full`)
+validates the dedicated evaluation account, schema, isolation paths, absence from
+the regular database, and dynamically reports document count without requiring it
+to remain zero, allowing ongoing evaluation runs after documents are indexed. It
+exits nonzero if any isolation check fails. Set `EVALUATION_ENV_FILE` to this
+private file before launching the backend; the application loader uses it with
+override precedence and requires the evaluation-mode marker, preventing regular
+`.env` resource fallback.
 
 Provisioning is a separately approved, one-time action. The provisioner creates
 only `exam_intelligence_evaluation`, the three approved private directories, the

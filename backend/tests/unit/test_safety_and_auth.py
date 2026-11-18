@@ -80,3 +80,172 @@ def test_chunk_consistency_audit_is_read_only(auth_client, db, isolated_runtime,
     assert report["chroma_ids_missing_from_sql"] == []
     assert db.query(Chunk).count() == before_sql
     assert isolated_runtime.collection.count() == before_vectors
+
+
+def test_evaluation_preflight_readiness_with_zero_one_and_multiple_documents(tmp_path):
+    from sqlalchemy import create_engine, text
+    from scripts.evaluation_preflight import collect_preflight_report
+
+    db_path = tmp_path / "preflight_eval.sqlite"
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
+    with engine.connect() as conn:
+        conn.execute(text("create table users (id integer primary key, email text)"))
+        conn.execute(text("create table documents (id integer primary key, uploaded_by integer)"))
+        conn.execute(text("create table chunks (id integer primary key, document_id integer)"))
+        conn.execute(text("insert into users (id, email) values (1, 'eval@test.invalid')"))
+        conn.commit()
+
+    regular_db_path = tmp_path / "preflight_reg.sqlite"
+    regular_engine = create_engine(f"sqlite:///{regular_db_path.as_posix()}")
+    with regular_engine.connect() as conn:
+        conn.execute(text("create table users (id integer primary key, email text)"))
+        conn.commit()
+
+    reg_env = tmp_path / "regular.env"
+    reg_env.write_text(f"DATABASE_URL=sqlite:///{regular_db_path.as_posix()}\n", encoding="utf-8")
+
+    vector_dir = tmp_path / "private_chroma"
+    vector_dir.mkdir()
+    upload_dir = tmp_path / "private_uploads"
+    upload_dir.mkdir()
+
+    eval_env = tmp_path / "eval.env"
+    eval_env.write_text(
+        f"EXAM_INTELLIGENCE_EVALUATION_MODE=true\n"
+        f"DATABASE_URL=sqlite:///{db_path.as_posix()}\n"
+        f"VECTOR_DB_DIR={vector_dir.as_posix()}\n"
+        f"UPLOAD_DIR={upload_dir.as_posix()}\n"
+        f"EVALUATION_USER_EMAIL=eval@test.invalid\n"
+        f"EVALUATION_USER_ID=1\n",
+        encoding="utf-8",
+    )
+
+    expected_db = db_path.as_posix()
+    report_zero = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="full",
+        expected_database=expected_db,
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=tmp_path,
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+    assert report_zero["ready"] is True
+    assert report_zero["evaluation_account"]["document_count"] == 0
+    assert "evaluation_user_has_no_documents" not in report_zero["checks"]
+
+    report_bootstrap_zero = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="bootstrap",
+        expected_database=expected_db,
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=tmp_path,
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+    assert report_bootstrap_zero["ready"] is True
+    assert report_bootstrap_zero["checks"]["evaluation_user_has_no_documents"] is True
+
+    # Add 1 document
+    with engine.connect() as conn:
+        conn.execute(text("insert into documents (id, uploaded_by) values (101, 1)"))
+        conn.commit()
+
+    report_one = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="full",
+        expected_database=expected_db,
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=tmp_path,
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+    assert report_one["ready"] is True
+    assert report_one["evaluation_account"]["document_count"] == 1
+
+    report_bootstrap_one = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="bootstrap",
+        expected_database=expected_db,
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=tmp_path,
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+    assert report_bootstrap_one["ready"] is False
+    assert report_bootstrap_one["checks"]["evaluation_user_has_no_documents"] is False
+
+    # Add multiple documents
+    with engine.connect() as conn:
+        conn.execute(text("insert into documents (id, uploaded_by) values (102, 1), (103, 1)"))
+        conn.commit()
+
+    report_multi = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="full",
+        expected_database=expected_db,
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=tmp_path,
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+    assert report_multi["ready"] is True
+    assert report_multi["evaluation_account"]["document_count"] == 3
+
+    # Reject incorrect database name
+    report_bad_db = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="full",
+        expected_database="wrong_database_name",
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=tmp_path,
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+    assert report_bad_db["ready"] is False
+    assert report_bad_db["checks"]["database_name_matches"] is False
+
+    # Reject default storage paths
+    report_default_path = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="full",
+        expected_database=expected_db,
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=vector_dir.parent,  # causes vector_dir to be chroma_db if matching name
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+
+    # Reject if evaluation user is present in regular database
+    with regular_engine.connect() as conn:
+        conn.execute(text("insert into users (id, email) values (99, 'eval@test.invalid')"))
+        conn.commit()
+
+    report_leaked = collect_preflight_report(
+        evaluation_env=str(eval_env),
+        mode="full",
+        expected_database=expected_db,
+        expected_vector_dir=str(vector_dir),
+        expected_upload_dir=str(upload_dir),
+        verify_regular_env=str(reg_env),
+        backend_root=tmp_path,
+        engine_override=engine,
+        regular_engine_override=regular_engine,
+    )
+    assert report_leaked["ready"] is False
+    assert report_leaked["checks"]["evaluation_user_absent_from_regular_database"] is False
+

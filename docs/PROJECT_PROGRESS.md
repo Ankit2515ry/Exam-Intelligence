@@ -239,3 +239,21 @@ build pass; no frontend source changed.
 The isolated environment is ready but the selected corpus remains entirely
 unindexed. PDF indexing, Gemini calls, Phase 5, and retrieval changes remain out
 of scope pending approval.
+
+## Phase 4C: controlled evaluation corpus indexing — Step 1 & Step 2
+
+- [x] Correct preflight readiness logic in `backend/scripts/evaluation_preflight.py` to separate initial bootstrap zero-document checking from ongoing evaluation full readiness.
+- [x] Report evaluation account document count dynamically without requiring ongoing count to remain zero.
+- [x] Add regression tests verifying preflight succeeds with zero, one, and multiple documents, and rejects bad DB, storage paths, or cross-database leakage.
+- [x] Re-verify full evaluation isolation preflight against `exam_intelligence_evaluation`.
+- [x] Index PDF #1 (`10 RAG Architectures.pdf`, 8 physical pages, 8 retained pages, 34 chunks, UUID `cbd60b93-0e2b-4e19-b8ad-d63461eac601`) in Step 1.
+- [x] Index remaining 9 approved PDFs sequentially in Step 2: `SQL Notes by Apna College.pdf`, `CMC_Unit-I.pdf`, `MWC-A2.pdf`, `SQL (notes).pdf`, `MWC-A1.pdf`, `DBMS.pdf`, `Operating-Systems.pdf`, `OOPs.pdf`, and `DBMS_NOTES.pdf`.
+- [x] Configure `TESSERACT_CMD` in evaluation environment for scanned PDFs (`MWC-A1.pdf`, `MWC-A2.pdf`, `OOPs.pdf`, `DBMS_NOTES.pdf`).
+- [x] Verify API returns canonical UUIDs, owner ID 1, isolated storage paths, retained pages, and nonempty chunks for all 10 documents.
+- [x] Verify exact SQL-to-Chroma consistency: 3,449 chunks in `exam_intelligence_evaluation` match 3,449 vectors in `chroma-corpus-v1` with 100% ID set equality.
+- [x] Update private manifests (`corpus-v1-selection.json` and `corpus-v1-manifest.json`) marking all 10 PDFs `indexed` with assigned UUIDs and chunk counts. 0 pending documents remain in the selected corpus.
+- [x] Record empirical performance telemetry for all 10 ingestions in `backend/evaluation/private/metrics-corpus-v1.jsonl`: 73,203.7 ms cumulative ingestion duration across 796 pages (10.87 pages/sec overall throughput, 30,728.2 ms embedding duration, 33,550.7 ms OCR duration across 4 OCR documents).
+- [x] Re-run operational preflight: passes with `document_count = 10`.
+- [x] Re-verify test suite: 107 tests pass.
+
+Genuine RAG accuracy remains **NOT MEASURED** pending pilot/gold dataset authoring. All 10 selected PDFs are fully indexed. No Gemini calls were made.
